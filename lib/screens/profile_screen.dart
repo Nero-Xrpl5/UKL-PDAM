@@ -7,14 +7,14 @@ import '../widgets/custom_card.dart';
 import 'welcome_screen.dart';
 
 class ProfileScreen extends StatefulWidget {
-  const ProfileScreen({Key? key}) : super(key: key);
+  const ProfileScreen({super.key});
 
   @override
   State<ProfileScreen> createState() => _ProfileScreenState();
 }
 
 class _ProfileScreenState extends State<ProfileScreen> {
-  final CustomerApi _api = CustomerApi();
+  final CustomerApi _customerApi = CustomerApi();
   dynamic profileData;
   bool isLoading = true;
 
@@ -26,13 +26,22 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
   Future<void> _loadProfile() async {
     try {
-      final response = await _api.getMe();
-      setState(() {
-        profileData = response?['data'];
-        isLoading = false;
-      });
+      final provider = context.read<AppProvider>();
+      final isAdmin = provider.isAdmin;
+
+      final endpoint = isAdmin ? '/admins/me' : '/customers/me';
+      final response = await _customerApi.getMeDirect(endpoint);
+
+      if (mounted) {
+        setState(() {
+          profileData = response?['data'];
+          isLoading = false;
+        });
+      }
     } catch (e) {
-      setState(() => isLoading = false);
+      if (mounted) {
+        setState(() => isLoading = false);
+      }
     }
   }
 
@@ -83,7 +92,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                   const SizedBox(height: 8),
                                   Text(user?.name ?? 'User', style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: AppColors.white)),
                                   const SizedBox(height: 4),
-                                  Text(user?.email ?? profileData?['email'] ?? 'email@example.com', style: TextStyle(fontSize: 13, color: AppColors.white.withOpacity(0.7))),
+                                  Text(user?.email ?? profileData?['email']?.toString() ?? 'email@example.com', style: TextStyle(fontSize: 13, color: AppColors.white.withOpacity(0.7))),
                                 ],
                               ),
                             ),
@@ -93,14 +102,14 @@ class _ProfileScreenState extends State<ProfileScreen> {
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
-                                  _infoRow(Icons.person_outline, 'Nama Lengkap', profileData?['name'] ?? user?.name ?? '-'),
+                                  _infoRow(Icons.person_outline, 'Nama Lengkap', profileData?['name']?.toString() ?? user?.name ?? '-'),
                                   const Divider(height: 24),
-                                  _infoRow(Icons.phone_outlined, 'No Telepon', profileData?['phone'] ?? user?.phone ?? '-'),
+                                  _infoRow(Icons.phone_outlined, 'No Telepon', profileData?['phone']?.toString() ?? user?.phone ?? '-'),
                                   const Divider(height: 24),
                                   if (!isAdmin) ...[
-                                    _infoRow(Icons.home_outlined, 'Alamat', profileData?['address'] ?? '-'),
+                                    _infoRow(Icons.home_outlined, 'Alamat', profileData?['address']?.toString() ?? '-'),
                                     const Divider(height: 24),
-                                    _infoRow(Icons.badge_outlined, 'No Pelanggan', profileData?['customer_number'] ?? '-'),
+                                    _infoRow(Icons.badge_outlined, 'No Pelanggan', profileData?['customer_number']?.toString() ?? '-'),
                                     const Divider(height: 24),
                                   ],
                                   _infoRow(Icons.verified_user_outlined, 'Status', 'Aktif'),

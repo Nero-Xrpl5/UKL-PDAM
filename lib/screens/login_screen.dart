@@ -9,7 +9,7 @@ import 'register_screen.dart';
 
 class LoginScreen extends StatefulWidget {
   final bool isAdmin;
-  const LoginScreen({Key? key, this.isAdmin = false}) : super(key: key);
+  const LoginScreen({super.key, this.isAdmin = false});
 
   @override
   State<LoginScreen> createState() => _LoginScreenState();

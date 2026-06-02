@@ -1,16 +1,18 @@
 import 'package:flutter/material.dart';
-import 'package:tirta_app/services/api_service.dart';
 import '../constants/colors.dart';
 import '../services/customer_api.dart';
+import '../services/service_api.dart';
 import '../services/payment_api.dart';
+import '../services/api_service.dart';
+import '../constants/api.dart';
 import '../widgets/custom_card.dart';
 import 'customer_list_screen.dart';
 import 'service_list_screen.dart';
 import 'bill_list_screen.dart';
-import 'complaint_screen.dart';
+import 'notification_screen.dart';
 
 class AdminDashboardScreen extends StatefulWidget {
-  const AdminDashboardScreen({Key? key}) : super(key: key);
+  const AdminDashboardScreen({super.key});
 
   @override
   State<AdminDashboardScreen> createState() => _AdminDashboardScreenState();
@@ -20,6 +22,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
   final CustomerApi _customerApi = CustomerApi();
   final ServiceApi _serviceApi = ServiceApi();
   final PaymentApi _paymentApi = PaymentApi();
+  final ApiService _api = ApiService();
 
   int totalCustomers = 0;
   int totalServices = 0;
@@ -34,13 +37,13 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
 
   Future<void> _loadDashboardData() async {
     try {
-      final customers = await _customerApi.getCustomers(quantity: 1);
-      final services = await _serviceApi.getServices(quantity: 1);
+      final customerResponse = await _api.get('${ApiConfig.customers}?page=1&quantity=1');
+      final serviceResponse = await _api.get('${ApiConfig.services}?page=1&quantity=1');
       final payments = await _paymentApi.getPayments(quantity: 100);
-      
+
       setState(() {
-        totalCustomers = customers.length;
-        totalServices = services.length;
+        totalCustomers = (customerResponse?['count'] as num?)?.toInt() ?? 0;
+        totalServices = (serviceResponse?['count'] as num?)?.toInt() ?? 0;
         pendingPayments = payments.where((p) => p['verified'] == false).length;
         isLoading = false;
       });
@@ -75,13 +78,21 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                       ],
                     ),
                   ),
-                  Container(
-                    padding: const EdgeInsets.all(8),
-                    decoration: BoxDecoration(
-                      color: AppColors.white.withOpacity(0.2),
-                      shape: BoxShape.circle,
+                  GestureDetector(
+                    onTap: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(builder: (_) => const NotificationScreen()),
+                      );
+                    },
+                    child: Container(
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        color: AppColors.white.withOpacity(0.2),
+                        shape: BoxShape.circle,
+                      ),
+                      child: const Icon(Icons.notifications_outlined, color: AppColors.white, size: 22),
                     ),
-                    child: const Icon(Icons.notifications_outlined, color: AppColors.white, size: 22),
                   ),
                 ],
               ),
@@ -98,43 +109,47 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                 ),
                 child: isLoading
                     ? const Center(child: CircularProgressIndicator())
-                    : SingleChildScrollView(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Row(
-                              children: [
-                                Expanded(child: _statCard(totalCustomers.toString(), 'Total Pelanggan', Icons.people, AppColors.success)),
-                                const SizedBox(width: 12),
-                                Expanded(child: _statCard(pendingPayments.toString(), 'Belum Verifikasi', Icons.pending_actions, AppColors.warning)),
-                                const SizedBox(width: 12),
-                                Expanded(child: _statCard(totalServices.toString(), 'Total Layanan', Icons.build, AppColors.info)),
-                              ],
-                            ),
-                            const SizedBox(height: 24),
-                            GridView.count(
-                              shrinkWrap: true,
-                              physics: const NeverScrollableScrollPhysics(),
-                              crossAxisCount: 2,
-                              crossAxisSpacing: 12,
-                              mainAxisSpacing: 12,
-                              childAspectRatio: 1.3,
-                              children: [
-                                _menuCard('Data Pelanggan', Icons.people_outline, AppColors.subtle, AppColors.mainColor, () {
-                                  Navigator.push(context, MaterialPageRoute(builder: (_) => const CustomerListScreen()));
-                                }),
-                                _menuCard('Tagihan', Icons.receipt_long, AppColors.subtle, AppColors.mainColor, () {
-                                  Navigator.push(context, MaterialPageRoute(builder: (_) => const BillListScreen()));
-                                }),
-                                _menuCard('Layanan', Icons.build, const Color(0xFFFFF3E0), AppColors.warning, () {
-                                  Navigator.push(context, MaterialPageRoute(builder: (_) => const ServiceListScreen()));
-                                }),
-                                _menuCard('Pengaduan', Icons.report_problem, const Color(0xFFFFF3E0), AppColors.warning, () {
-                                  Navigator.push(context, MaterialPageRoute(builder: (_) => const ComplaintScreen()));
-                                }),
-                              ],
-                            ),
-                          ],
+                    : RefreshIndicator(
+                        onRefresh: _loadDashboardData,
+                        child: SingleChildScrollView(
+                          physics: const AlwaysScrollableScrollPhysics(),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(
+                                children: [
+                                  Expanded(child: _statCard(totalCustomers.toString(), 'Total Pelanggan', Icons.people, AppColors.success)),
+                                  const SizedBox(width: 12),
+                                  Expanded(child: _statCard(pendingPayments.toString(), 'Belum Verifikasi', Icons.pending_actions, AppColors.warning)),
+                                  const SizedBox(width: 12),
+                                  Expanded(child: _statCard(totalServices.toString(), 'Total Layanan', Icons.build, AppColors.info)),
+                                ],
+                              ),
+                              const SizedBox(height: 24),
+                              GridView.count(
+                                shrinkWrap: true,
+                                physics: const NeverScrollableScrollPhysics(),
+                                crossAxisCount: 2,
+                                crossAxisSpacing: 12,
+                                mainAxisSpacing: 12,
+                                childAspectRatio: 1.3,
+                                children: [
+                                  _menuCard('Data Pelanggan', Icons.people_outline, AppColors.subtle, AppColors.mainColor, () {
+                                    Navigator.push(context, MaterialPageRoute(builder: (_) => const CustomerListScreen()));
+                                  }),
+                                  _menuCard('Tagihan', Icons.receipt_long, AppColors.subtle, AppColors.mainColor, () {
+                                    Navigator.push(context, MaterialPageRoute(builder: (_) => const BillListScreen()));
+                                  }),
+                                  _menuCard('Layanan', Icons.build, const Color(0xFFFFF3E0), AppColors.warning, () {
+                                    Navigator.push(context, MaterialPageRoute(builder: (_) => const ServiceListScreen()));
+                                  }),
+                                  _menuCard('Notifikasi', Icons.notifications, const Color(0xFFE3F2FD), AppColors.info, () {
+                                    Navigator.push(context, MaterialPageRoute(builder: (_) => const NotificationScreen()));
+                                  }),
+                                ],
+                              ),
+                            ],
+                          ),
                         ),
                       ),
               ),

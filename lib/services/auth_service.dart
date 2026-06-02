@@ -7,9 +7,7 @@ import 'api_service.dart';
 class AuthService {
   static final AuthService _instance = AuthService._internal();
   factory AuthService() => _instance;
-  AuthService._internal() {
-    ApiService.setAppOwnerToken(ApiConfig.appOwnerToken);
-  }
+  AuthService._internal();
 
   final ApiService _api = ApiService();
 

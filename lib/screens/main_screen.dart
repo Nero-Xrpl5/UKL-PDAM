@@ -1,40 +1,55 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import '../constants/colors.dart';
 import '../providers/app_provider.dart';
-import '../widgets/bottom_nav.dart';
-import 'customer_home_screen.dart';
 import 'admin_dashboard_screen.dart';
+import 'customer_home_screen.dart';
 import 'bill_list_screen.dart';
-import 'complaint_screen.dart';
 import 'profile_screen.dart';
+import 'service_list_customer_screen.dart';
+import 'notification_screen.dart';
+import '../widgets/bottom_nav.dart';
 
-class MainScreen extends StatelessWidget {
-  const MainScreen({Key? key}) : super(key: key);
+class MainScreen extends StatefulWidget {
+  const MainScreen({super.key});
+
+  @override
+  State<MainScreen> createState() => _MainScreenState();
+}
+
+class _MainScreenState extends State<MainScreen> {
+  int _currentIndex = 0;
 
   @override
   Widget build(BuildContext context) {
-    return Consumer<AppProvider>(
-      builder: (context, provider, child) {
-        final isAdmin = provider.isAdmin;
-        final screens = [
-          isAdmin ? const AdminDashboardScreen() : const CustomerHomeScreen(),
-          const BillListScreen(),
-          const ComplaintScreen(),
-          const ProfileScreen(),
-        ];
+    final isAdmin = context.watch<AppProvider>().isAdmin;
 
-        return Scaffold(
-          body: IndexedStack(
-            index: provider.bottomNavIndex,
-            children: screens,
-          ),
-          bottomNavigationBar: BottomNavBar(
-            currentIndex: provider.bottomNavIndex,
-            onTap: provider.setBottomNavIndex,
-            isAdmin: isAdmin,
-          ),
-        );
-      },
+    final adminScreens = const [
+      AdminDashboardScreen(),
+      BillListScreen(),
+      NotificationScreen(), // Admin: Notifikasi (sync dengan pembayaran)
+      ProfileScreen(),
+    ];
+
+    final customerScreens = const [
+      CustomerHomeScreen(),
+      BillListScreen(),
+      ServiceListCustomerScreen(), // Customer: Layanan (read-only)
+      ProfileScreen(),
+    ];
+
+    final screens = isAdmin ? adminScreens : customerScreens;
+
+    return Scaffold(
+      body: IndexedStack(
+        index: _currentIndex,
+        children: screens,
+      ),
+      bottomNavigationBar: BottomNav(
+        currentIndex: _currentIndex,
+        isAdmin: isAdmin,
+        onTap: (index) => setState(() => _currentIndex = index),
+      ),
     );
   }
 }

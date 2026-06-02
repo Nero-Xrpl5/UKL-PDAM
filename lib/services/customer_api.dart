@@ -27,4 +27,8 @@ class CustomerApi {
   Future<dynamic> getMe() async {
     return await _api.get('/customers/me');
   }
+
+  Future<dynamic> getMeDirect(String endpoint) async {
+    return await _api.get(endpoint);
+  }
 }

@@ -8,7 +8,7 @@ import 'login_screen.dart';
 
 class RegisterScreen extends StatefulWidget {
   final bool isAdmin;
-  const RegisterScreen({Key? key, this.isAdmin = false}) : super(key: key);
+  const RegisterScreen({super.key, this.isAdmin = false});
 
   @override
   State<RegisterScreen> createState() => _RegisterScreenState();
@@ -42,67 +42,68 @@ class _RegisterScreenState extends State<RegisterScreen> {
     }
 
     final provider = context.read<AppProvider>();
-    
+
     if (isAdmin) {
-      final data = {
+      final Map<String, dynamic> data = {
         'username': _usernameCtrl.text,
         'password': _passwordCtrl.text,
         'name': _nameCtrl.text,
         'phone': _phoneCtrl.text,
       };
-      
+
       provider.setLoading(true);
       try {
         final result = await provider.registerAdmin(data);
-        if (result) {
-          if (mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(
-                content: Text('Registrasi Admin berhasil! Silakan login.'),
-                backgroundColor: AppColors.success,
-              ),
-            );
-            Navigator.pushReplacement(
-              context,
-              MaterialPageRoute(builder: (_) => LoginScreen(isAdmin: true)),
-            );
-          }
+        if (result && mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Registrasi Admin berhasil! Silakan login.'),
+              backgroundColor: AppColors.success,
+            ),
+          );
+          Navigator.pushReplacement(
+            context,
+            MaterialPageRoute(builder: (_) => const LoginScreen(isAdmin: true)),
+          );
         }
       } catch (e) {
         provider.setLoading(false);
         provider.setError('Registrasi gagal: ${e.toString()}');
       }
     } else {
-      final data = {
-        'username': _usernameCtrl.text,
+      // CUSTOMER: username = customer_number (sama seperti admin tambah customer)
+      final String username = _customerNumberCtrl.text.isNotEmpty
+          ? _customerNumberCtrl.text
+          : _phoneCtrl.text;
+
+      final Map<String, dynamic> data = {
+        'username': username,
         'password': _passwordCtrl.text,
         'name': _nameCtrl.text,
         'phone': _phoneCtrl.text,
-        'customer_number': _customerNumberCtrl.text.isNotEmpty 
-            ? _customerNumberCtrl.text 
+        'customer_number': _customerNumberCtrl.text.isNotEmpty
+            ? _customerNumberCtrl.text
             : _phoneCtrl.text,
-        'address': _addressCtrl.text.isNotEmpty 
-            ? _addressCtrl.text 
+        'address': _addressCtrl.text.isNotEmpty
+            ? _addressCtrl.text
             : 'Malang',
         'service_id': 1,
       };
-      
+
       provider.setLoading(true);
       try {
         final result = await provider.registerCustomer(data);
-        if (result) {
-          if (mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(
-                content: Text('Registrasi Customer berhasil! Silakan login.'),
-                backgroundColor: AppColors.success,
-              ),
-            );
-            Navigator.pushReplacement(
-              context,
-              MaterialPageRoute(builder: (_) => LoginScreen(isAdmin: false)),
-            );
-          }
+        if (result && mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Registrasi Customer berhasil! Silakan login.'),
+              backgroundColor: AppColors.success,
+            ),
+          );
+          Navigator.pushReplacement(
+            context,
+            MaterialPageRoute(builder: (_) => const LoginScreen(isAdmin: false)),
+          );
         }
       } catch (e) {
         provider.setLoading(false);
@@ -181,14 +182,17 @@ class _RegisterScreenState extends State<RegisterScreen> {
                         validator: (v) => v == null || v.isEmpty ? 'Wajib diisi' : null,
                       ),
                       const SizedBox(height: 16),
-                      CustomTextField(
-                        label: 'Username',
-                        hint: 'Masukan Username',
-                        icon: Icons.person_outline,
-                        controller: _usernameCtrl,
-                        validator: (v) => v == null || v.isEmpty ? 'Wajib diisi' : null,
-                      ),
-                      const SizedBox(height: 16),
+                      // Admin: input username terpisah. Customer: username = customer_number (auto)
+                      if (isAdmin) ...[
+                        CustomTextField(
+                          label: 'Username',
+                          hint: 'Masukan Username',
+                          icon: Icons.person_outline,
+                          controller: _usernameCtrl,
+                          validator: (v) => v == null || v.isEmpty ? 'Wajib diisi' : null,
+                        ),
+                        const SizedBox(height: 16),
+                      ],
                       CustomTextField(
                         label: 'Email',
                         hint: 'Masukan Email',
@@ -214,6 +218,14 @@ class _RegisterScreenState extends State<RegisterScreen> {
                           icon: Icons.badge_outlined,
                           controller: _customerNumberCtrl,
                           validator: (v) => v == null || v.isEmpty ? 'Wajib diisi' : null,
+                        ),
+                        const SizedBox(height: 4),
+                        Padding(
+                          padding: const EdgeInsets.only(left: 8),
+                          child: Text(
+                            'No Pelanggan akan digunakan sebagai Username untuk login',
+                            style: TextStyle(fontSize: 11, color: AppColors.dark3, fontStyle: FontStyle.italic),
+                          ),
                         ),
                         const SizedBox(height: 16),
                         CustomTextField(
