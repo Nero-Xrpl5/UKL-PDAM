@@ -1,0 +1,45 @@
+name: tirta_app
+description: Aplikasi PDAM TirtaApp - Bersih Sehat Terpercaya
+publish_to: 'none'
+version: 1.0.0+1
+
+environment:
+  sdk: '>=3.0.0 <4.0.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+  cupertino_icons: ^1.0.6
+  http: ^1.2.0
+  shared_preferences: ^2.2.0
+  intl: ^0.19.0
+  image_picker: ^1.0.7
+  path_provider: ^2.1.0
+  provider: ^6.1.0
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^3.0.0
+
+flutter:
+  uses-material-design: true
+  assets:
+    - assets/images/logo.png
+    - assets/images/avatar_default.png
+    - assets/images/welcome_person.png
+    - assets/images/google_icon.png
+    - assets/images/apple_icon.png
+    - assets/images/admin_icon.png
+    - assets/images/user_icon.png
+    - assets/images/welcome_bg.png
+    - assets/images/empty_state.png
+    - assets/images/payment_success.png
+    - assets/images/bill_icon.png
+    - assets/images/service_pipe.png
+    - assets/images/service_meter.png
+    - assets/images/service_install.png
+    - assets/images/service_temp.png
+    - assets/images/complaint_icon.png
+    - assets/images/notification_icon.png
+    - assets/images/chart_placeholder.png
