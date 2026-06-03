@@ -1,15 +1,13 @@
 import 'package:flutter/material.dart';
+import 'package:fl_chart/fl_chart.dart';
 import 'package:provider/provider.dart';
 import '../constants/colors.dart';
-import '../constants/api.dart';
 import '../utils/helpers.dart';
 import '../providers/app_provider.dart';
 import '../services/bill_api.dart';
 import '../services/api_service.dart';
 import '../widgets/shimmer_card.dart';
 import 'bill_list_screen.dart';
-import 'complaint_screen.dart';
-import 'service_list_customer_screen.dart';
 import 'payment_screen.dart';
 
 class CustomerHomeScreen extends StatefulWidget {
@@ -24,7 +22,7 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen>
   final BillApi _billApi = BillApi();
   final ApiService _api = ApiService();
 
-  List myBills = [];
+  List<dynamic> myBills = [];
   dynamic profileData;
   bool isLoading = true;
   String? errorMessage;
@@ -58,7 +56,7 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen>
       errorMessage = null;
     });
     try {
-      final bills = await _billApi.getMyBills();
+      final bills = await _billApi.getMyBills(quantity: 100);
       final response = await _api.get('/customers/me');
 
       if (mounted) {
@@ -79,34 +77,129 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen>
     }
   }
 
-  dynamic get _latestBill {
-    if (myBills.isEmpty) return null;
-    final unpaid = myBills.where((b) => b['paid'] != true).toList();
-    if (unpaid.isNotEmpty) {
-      unpaid.sort((a, b) {
-        final ay = ((a['year'] ?? 0) as num).toInt() * 100 + ((a['month'] ?? 0) as num).toInt();
-        final by = ((b['year'] ?? 0) as num).toInt() * 100 + ((b['month'] ?? 0) as num).toInt();
-        return by.compareTo(ay);
-      });
-      return unpaid.first;
-    }
-    return myBills.first;
+  // --- Logic perhitungan status tagihan ---
+  List<dynamic> get _unpaidBills {
+    return myBills.where((b) => b['paid'] != true).toList();
   }
 
-  String get _greeting {
-    final hour = DateTime.now().hour;
-    if (hour < 11) return 'Selamat Pagi';
-    if (hour < 15) return 'Selamat Siang';
-    if (hour < 18) return 'Selamat Sore';
-    return 'Selamat Malam';
+  List<dynamic> get _overdueBills {
+    final now = DateTime.now();
+    return _unpaidBills.where((b) {
+      final year = ((b['year'] ?? now.year) as num).toInt();
+      final month = ((b['month'] ?? now.month) as num).toInt();
+      return now.year > year || (now.year == year && now.month > month);
+    }).toList();
+  }
+
+  List<dynamic> get _dueSoonBills {
+    final now = DateTime.now();
+    return _unpaidBills.where((b) {
+      final year = ((b['year'] ?? now.year) as num).toInt();
+      final month = ((b['month'] ?? now.month) as num).toInt();
+      return (now.year == year && now.month == month) ||
+          (now.year == year && now.month + 1 == month);
+    }).toList();
+  }
+
+  List<dynamic> get _paidBills {
+    return myBills.where((b) => b['paid'] == true).toList();
+  }
+
+  int get _totalUnpaidAmount {
+    return _unpaidBills.fold<int>(
+        0, (sum, b) => sum + ((b['price'] ?? 0) as num).toInt());
+  }
+
+  // --- Data untuk grafik 6 bulan terakhir ---
+  List<_ChartData> get _chartData {
+    final now = DateTime.now();
+    final List<_ChartData> data = [];
+    for (int i = 5; i >= 0; i--) {
+      final d = DateTime(now.year, now.month - i, 1);
+      final month = d.month;
+      final year = d.year;
+      final monthBills = myBills.where((b) {
+        return ((b['month'] ?? 0) as num).toInt() == month &&
+            ((b['year'] ?? 0) as num).toInt() == year;
+      }).toList();
+
+      int lunas = 0;
+      int denda = 0;
+      int belum = 0;
+
+      for (final b in monthBills) {
+        final price = ((b['price'] ?? 0) as num).toInt();
+        final isPaid = b['paid'] == true;
+        final isOverdue = !isPaid &&
+            (now.year > year || (now.year == year && now.month > month));
+
+        if (isPaid) {
+          lunas += price;
+        } else if (isOverdue) {
+          denda += price;
+        } else {
+          belum += price;
+        }
+      }
+
+      data.add(_ChartData(
+        month: month,
+        year: year,
+        label: _monthShort(month),
+        lunas: lunas,
+        denda: denda,
+        belum: belum,
+      ));
+    }
+    return data;
+  }
+
+  String _monthShort(int m) {
+    const names = [
+      '',
+      'Jan',
+      'Feb',
+      'Mar',
+      'Apr',
+      'May',
+      'Jun',
+      'Jul',
+      'Agu',
+      'Sep',
+      'Okt',
+      'Nov',
+      'Des'
+    ];
+    return names[m];
+  }
+
+  String _monthLong(int m) {
+    const names = [
+      '',
+      'Januari',
+      'Februari',
+      'Maret',
+      'April',
+      'Mei',
+      'Juni',
+      'Juli',
+      'Agustus',
+      'September',
+      'Oktober',
+      'November',
+      'Desember'
+    ];
+    return names[m];
   }
 
   @override
   Widget build(BuildContext context) {
     final user = context.watch<AppProvider>().user;
-    final latestBill = _latestBill;
-    final service = profileData?['service'] as Map?;
-    final maxUsage = ((service?['max_usage'] ?? 20) as num).toInt();
+    final unpaidCount = _unpaidBills.length;
+    final overdueCount = _overdueBills.length;
+    final dueSoonCount = _dueSoonBills.length;
+    final paidCount = _paidBills.length;
+    final chartData = _chartData;
 
     return Scaffold(
       backgroundColor: AppColors.bgLight,
@@ -115,13 +208,14 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen>
         child: CustomScrollView(
           physics: const AlwaysScrollableScrollPhysics(),
           slivers: [
+            // --- HEADER GRADIENT ---
             SliverToBoxAdapter(
               child: Container(
                 decoration: const BoxDecoration(
                   gradient: LinearGradient(
                     begin: Alignment.topLeft,
                     end: Alignment.bottomRight,
-                    colors: [Color(0xFF4A90E2), Color(0xFF357ABD)],
+                    colors: [Color(0xFF4DA6FF), Color(0xFF0077E6)],
                   ),
                   borderRadius: BorderRadius.only(
                     bottomLeft: Radius.circular(30),
@@ -130,83 +224,96 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen>
                 ),
                 child: SafeArea(
                   bottom: false,
-                  child: Stack(
-                    children: [
-                      Positioned(
-                        top: -40,
-                        right: -40,
-                        child: Container(
-                          width: 140,
-                          height: 140,
-                          decoration: const BoxDecoration(
-                            color: Color(0x14FFFFFF),
-                            shape: BoxShape.circle,
-                          ),
-                        ),
-                      ),
-                      Positioned(
-                        top: 20,
-                        right: 60,
-                        child: Container(
-                          width: 60,
-                          height: 60,
-                          decoration: const BoxDecoration(
-                            color: Color(0x0FFFFFFF),
-                            shape: BoxShape.circle,
-                          ),
-                        ),
-                      ),
-                      Padding(
-                        padding: const EdgeInsets.fromLTRB(20, 16, 20, 28),
-                        child: Row(
-                          crossAxisAlignment: CrossAxisAlignment.start,
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(20, 16, 20, 28),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
-                            Container(
-                              width: 52,
-                              height: 52,
-                              decoration: const BoxDecoration(
-                                color: Color(0x33FFFFFF),
-                                shape: BoxShape.circle,
-                                border: Border.fromBorderSide(
-                                  BorderSide(color: Color(0x4DFFFFFF), width: 2),
+                            Row(
+                              children: [
+                                Container(
+                                  width: 44,
+                                  height: 44,
+                                  decoration: BoxDecoration(
+                                    color: const Color(0x33FFFFFF),
+                                    shape: BoxShape.circle,
+                                    border: Border.all(
+                                      color: const Color(0x4DFFFFFF),
+                                      width: 2,
+                                    ),
+                                  ),
+                                  child: const Icon(
+                                    Icons.person,
+                                    color: AppColors.white,
+                                    size: 22,
+                                  ),
                                 ),
-                              ),
-                              child: const Icon(Icons.person, color: AppColors.white, size: 28),
-                            ),
-                            const SizedBox(width: 14),
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(
-                                    '$_greeting,',
-                                    style: const TextStyle(
-                                      fontSize: 13,
-                                      color: Color(0xD9FFFFFF),
-                                      fontWeight: FontWeight.w500,
+                                const SizedBox(width: 12),
+                                Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      'Dashboard Saya',
+                                      style: TextStyle(
+                                        fontSize: 13,
+                                        color: AppColors.white70,
+                                        fontWeight: FontWeight.w500,
+                                      ),
                                     ),
-                                  ),
-                                  const SizedBox(height: 2),
-                                  Text(
-                                    profileData?['name']?.toString() ?? user?.name ?? 'Customer',
-                                    style: const TextStyle(
-                                      fontSize: 22,
-                                      fontWeight: FontWeight.bold,
-                                      color: AppColors.white,
+                                    const SizedBox(height: 2),
+                                    Text(
+                                      profileData?['name']?.toString() ??
+                                          user?.name ??
+                                          'Customer',
+                                      style: const TextStyle(
+                                        fontSize: 18,
+                                        fontWeight: FontWeight.bold,
+                                        color: AppColors.white,
+                                      ),
                                     ),
-                                  ),
-                                ],
+                                  ],
+                                ),
+                              ],
+                            ),
+                            Container(
+                              padding: const EdgeInsets.all(10),
+                              decoration: const BoxDecoration(
+                                color: Color(0x26FFFFFF),
+                                shape: BoxShape.circle,
+                              ),
+                              child: const Icon(
+                                Icons.notifications_outlined,
+                                color: AppColors.white,
+                                size: 22,
                               ),
                             ),
-                            const Text('👋', style: TextStyle(fontSize: 28)),
                           ],
                         ),
-                      ),
-                    ],
+                        const SizedBox(height: 20),
+                        // --- CARD RINGKASAN TAGIHAN ---
+                        if (isLoading)
+                          const ShimmerCard(
+                              height: 120, margin: EdgeInsets.zero)
+                        else if (unpaidCount > 0)
+                          _buildWarningCard(
+                            unpaidCount: unpaidCount,
+                            totalAmount: _totalUnpaidAmount,
+                            dueSoon: dueSoonCount,
+                            overdue: overdueCount,
+                          )
+                        else
+                          _buildPaidOffCard(),
+                      ],
+                    ),
                   ),
                 ),
               ),
             ),
+
+            // --- BODY CONTENT ---
             SliverToBoxAdapter(
               child: FadeTransition(
                 opacity: _fadeAnimation,
@@ -216,118 +323,153 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen>
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       const SizedBox(height: 20),
-                      if (isLoading)
-                        const ShimmerCard(height: 200)
-                      else if (latestBill != null)
-                        _buildBillCard(latestBill)
-                      else
-                        _buildEmptyBillCard(),
-                      const SizedBox(height: 24),
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceAround,
-                        children: [
-                          _quickMenu(
-                            icon: Icons.description_outlined,
-                            label: 'Tagihan\nSaya',
-                            bgColor: const Color(0xFFE8F8F0),
-                            iconColor: const Color(0xFF27AE60),
-                            onTap: () => Navigator.push(
-                              context,
-                              MaterialPageRoute(builder: (_) => const BillListScreen()),
-                            ),
-                          ),
-                          _quickMenu(
-                            icon: Icons.dashboard_outlined,
-                            label: 'Dashboard',
-                            bgColor: const Color(0xFFE3F2FD),
-                            iconColor: const Color(0xFF2196F3),
-                            onTap: () {
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                const SnackBar(
-                                  content: Text('Anda sudah di Dashboard'),
-                                  duration: Duration(seconds: 1),
-                                ),
-                              );
-                            },
-                          ),
-                          _quickMenu(
-                            icon: Icons.chat_bubble_outline,
-                            label: 'Pengaduan',
-                            bgColor: const Color(0xFFFFF8E1),
-                            iconColor: const Color(0xFFFFA000),
-                            onTap: () => Navigator.push(
-                              context,
-                              MaterialPageRoute(builder: (_) => const ComplaintScreen()),
-                            ),
-                          ),
-                          _quickMenu(
-                            icon: Icons.headset_mic_outlined,
-                            label: 'Tambah\nLayanan',
-                            bgColor: const Color(0xFFF3E5F5),
-                            iconColor: const Color(0xFF9C27B0),
-                            onTap: () => Navigator.push(
-                              context,
-                              MaterialPageRoute(builder: (_) => const ServiceListCustomerScreen()),
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 28),
-                      if (isLoading)
-                        const ShimmerCard(height: 140)
-                      else if (latestBill != null)
-                        _buildUsageCard(latestBill, maxUsage)
-                      else
-                        _buildEmptyUsageCard(),
-                      const SizedBox(height: 24),
+
+                      // --- GRAFIK TAGIHAN ---
                       Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
                           const Text(
-                            'Riwayat Tagihan',
+                            'Grafik Tagihan',
                             style: TextStyle(
-                              fontSize: 16,
+                              fontSize: 18,
                               fontWeight: FontWeight.bold,
-                              color: Color(0xFF1A1A1A),
+                              color: Color(0xFF1A237E),
                             ),
                           ),
                           GestureDetector(
                             onTap: () => Navigator.push(
                               context,
-                              MaterialPageRoute(builder: (_) => const BillListScreen()),
+                              MaterialPageRoute(
+                                builder: (_) => const BillListScreen(),
+                              ),
                             ),
                             child: Row(
                               children: [
                                 Text(
-                                  'Lihat Semua',
+                                  'Detail',
                                   style: TextStyle(
-                                    fontSize: 12,
-                                    color: const Color(0xFF4A90E2),
+                                    fontSize: 14,
+                                    color: AppColors.mainColor,
                                     fontWeight: FontWeight.w600,
                                   ),
                                 ),
-                                const SizedBox(width: 2),
-                                const Icon(Icons.chevron_right, size: 16, color: Color(0xFF4A90E2)),
+                                const SizedBox(width: 4),
+                                const Icon(
+                                  Icons.arrow_forward_ios,
+                                  size: 14,
+                                  color: AppColors.mainColor,
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        'Riwayat Tagihan 6 Bulan',
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: AppColors.grey600,
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+
+                      if (isLoading)
+                        const ShimmerCard(height: 200)
+                      else
+                        _buildChartCard(chartData),
+
+                      const SizedBox(height: 20),
+
+                      // --- STATISTIK RINGKASAN ---
+                      Row(
+                        children: [
+                          Expanded(
+                            child: _statSummaryCard(
+                              value: '$paidCount',
+                              label: 'Lunas',
+                              color: AppColors.mainColor,
+                              bgColor: const Color(0xFFE3F2FD),
+                            ),
+                          ),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: _statSummaryCard(
+                              value: '${_overdueBills.length}',
+                              label: 'Terlambat',
+                              color: AppColors.error,
+                              bgColor: const Color(0xFFFFEBEE),
+                            ),
+                          ),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: _statSummaryCard(
+                              value: '${_unpaidBills.length}',
+                              label: 'Belum Bayar',
+                              color: const Color(0xFFFF9800),
+                              bgColor: const Color(0xFFFFF3E0),
+                            ),
+                          ),
+                        ],
+                      ),
+
+                      const SizedBox(height: 24),
+
+                      // --- TAGIHAN TERBARU ---
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          const Text(
+                            'Tagihan Terbaru',
+                            style: TextStyle(
+                              fontSize: 18,
+                              fontWeight: FontWeight.bold,
+                              color: Color(0xFF1A237E),
+                            ),
+                          ),
+                          GestureDetector(
+                            onTap: () => Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (_) => const BillListScreen(),
+                              ),
+                            ),
+                            child: Row(
+                              children: [
+                                Text(
+                                  'Detail',
+                                  style: TextStyle(
+                                    fontSize: 14,
+                                    color: AppColors.mainColor,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                                const SizedBox(width: 4),
+                                const Icon(
+                                  Icons.arrow_forward_ios,
+                                  size: 14,
+                                  color: AppColors.mainColor,
+                                ),
                               ],
                             ),
                           ),
                         ],
                       ),
                       const SizedBox(height: 12),
+
                       if (isLoading)
                         const Column(
                           children: [
-                            ShimmerCard(height: 72),
+                            ShimmerCard(height: 100),
                             SizedBox(height: 10),
-                            ShimmerCard(height: 72),
-                            SizedBox(height: 10),
-                            ShimmerCard(height: 72),
+                            ShimmerCard(height: 100),
                           ],
                         )
                       else if (myBills.isEmpty)
-                        _buildEmptyHistory()
+                        _buildEmptyBills()
                       else
-                        ...myBills.take(5).map((b) => _buildHistoryItem(b)).toList(),
+                        ...myBills.take(3).map((b) => _buildBillItem(b)),
+
                       const SizedBox(height: 16),
                     ],
                   ),
@@ -340,96 +482,115 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen>
     );
   }
 
-  Widget _buildBillCard(dynamic bill) {
-    final monthNames = ['', 'Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni',
-        'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'];
-    final month = ((bill['month'] ?? 1) as num).toInt();
-    final year = ((bill['year'] ?? 2026) as num).toInt();
-    final price = ((bill['price'] ?? 0) as num).toInt();
-    final isPaid = bill['paid'] == true;
-
+  // --- WIDGET: CARD WARNING ---
+  Widget _buildWarningCard({
+    required int unpaidCount,
+    required int totalAmount,
+    required int dueSoon,
+    required int overdue,
+  }) {
     return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(20),
-      decoration: const BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [Color(0xFF27AE60), Color(0xFF219653)],
-        ),
-        borderRadius: BorderRadius.all(Radius.circular(24)),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: const Color(0xFFE53935),
+        borderRadius: BorderRadius.circular(20),
         boxShadow: [
           BoxShadow(
-            color: Color(0x4027AE60),
-            blurRadius: 16,
-            offset: Offset(0, 8),
+            color: const Color(0x40E53935),
+            blurRadius: 12,
+            offset: const Offset(0, 6),
           ),
         ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            'Tagihan Bulan Ini • ${monthNames[month]} $year',
-            style: const TextStyle(
-              fontSize: 13,
-              color: Color(0xE6FFFFFF),
-              fontWeight: FontWeight.w500,
-            ),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            formatRupiah(price),
-            style: const TextStyle(
-              fontSize: 36,
-              fontWeight: FontWeight.bold,
-              color: AppColors.white,
-              letterSpacing: -0.5,
-            ),
-          ),
-          const SizedBox(height: 4),
-          Text(
-            'Jatuh Tempo: 30 ${monthNames[month]} $year',
-            style: const TextStyle(
-              fontSize: 12,
-              color: Color(0xCCFFFFFF),
-            ),
-          ),
-          const SizedBox(height: 20),
           Row(
             children: [
-              Expanded(
-                child: _billActionButton(
-                  icon: Icons.payment_outlined,
-                  label: 'Bayar Sekarang',
-                  onTap: isPaid
-                      ? () {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(
-                              content: Text('Tagihan sudah lunas'),
-                              backgroundColor: AppColors.success,
-                            ),
-                          );
-                        }
-                      : () => Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (_) => PaymentScreen(bill: bill),
-                          ),
-                        ).then((_) => _loadData()),
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: const BoxDecoration(
+                  color: Color(0x33FFFFFF),
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(
+                  Icons.warning_amber_rounded,
+                  color: AppColors.white,
+                  size: 24,
                 ),
               ),
               const SizedBox(width: 12),
               Expanded(
-                child: _billActionButton(
-                  icon: Icons.visibility_outlined,
-                  label: 'Lihat Tagihan',
-                  onTap: () => Navigator.push(
-                    context,
-                    MaterialPageRoute(builder: (_) => const BillListScreen()),
-                  ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      '$unpaidCount Tagihan',
+                      style: const TextStyle(
+                        fontSize: 20,
+                        fontWeight: FontWeight.bold,
+                        color: AppColors.white,
+                      ),
+                    ),
+                    Text(
+                      'Belum di bayar Total ${formatRupiah(totalAmount)}',
+                      style: const TextStyle(
+                        fontSize: 13,
+                        color: Color(0xCCFFFFFF),
+                      ),
+                    ),
+                  ],
                 ),
               ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          const Divider(color: Color(0x33FFFFFF), height: 1),
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              if (dueSoon > 0)
+                Expanded(
+                  child: Row(
+                    children: [
+                      const Icon(
+                        Icons.access_time,
+                        color: Color(0xFFFFF59D),
+                        size: 18,
+                      ),
+                      const SizedBox(width: 6),
+                      Text(
+                        '$dueSoon akan jatuh tempo',
+                        style: const TextStyle(
+                          fontSize: 12,
+                          color: Color(0xFFFFF59D),
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              if (overdue > 0)
+                Expanded(
+                  child: Row(
+                    children: [
+                      const Icon(
+                        Icons.error_outline,
+                        color: Color(0xFFFFCDD2),
+                        size: 18,
+                      ),
+                      const SizedBox(width: 6),
+                      Text(
+                        '$overdue Terlambat',
+                        style: const TextStyle(
+                          fontSize: 12,
+                          color: Color(0xFFFFCDD2),
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
             ],
           ),
         ],
@@ -437,109 +598,191 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen>
     );
   }
 
-  Widget _buildEmptyBillCard() {
+  Widget _buildPaidOffCard() {
     return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(24),
-      decoration: const BoxDecoration(
-        gradient: LinearGradient(
-          colors: [Color(0xFF27AE60), Color(0xFF219653)],
-        ),
-        borderRadius: BorderRadius.all(Radius.circular(24)),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: AppColors.success,
+        borderRadius: BorderRadius.circular(20),
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Text(
-            'Tagihan Bulan Ini',
-            style: TextStyle(fontSize: 13, color: Color(0xE6FFFFFF)),
-          ),
-          const SizedBox(height: 12),
-          const Text(
-            'Belum ada tagihan',
-            style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: AppColors.white),
-          ),
-          const SizedBox(height: 16),
-          const Text(
-            'Anda tidak memiliki tagihan aktif saat ini.',
-            style: TextStyle(fontSize: 12, color: Color(0xCCFFFFFF)),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _billActionButton({
-    required IconData icon,
-    required String label,
-    required VoidCallback onTap,
-  }) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 12),
-        decoration: BoxDecoration(
-          color: const Color(0x26FFFFFF),
-          borderRadius: BorderRadius.circular(12),
-          border: const Border.fromBorderSide(
-            BorderSide(color: Color(0x40FFFFFF), width: 1),
-          ),
-        ),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(icon, color: AppColors.white, size: 18),
-            const SizedBox(width: 8),
-            Text(
-              label,
-              style: const TextStyle(
-                color: AppColors.white,
-                fontSize: 13,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _quickMenu({
-    required IconData icon,
-    required String label,
-    required Color bgColor,
-    required Color iconColor,
-    required VoidCallback onTap,
-  }) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Column(
+      child: Row(
         children: [
           Container(
-            width: 60,
-            height: 60,
-            decoration: BoxDecoration(
-              color: bgColor,
-              borderRadius: BorderRadius.circular(16),
-              boxShadow: [
-                BoxShadow(
-                  color: Color.fromRGBO(iconColor.red, iconColor.green, iconColor.blue, 0.12),
-                  blurRadius: 8,
-                  offset: const Offset(0, 4),
+            padding: const EdgeInsets.all(8),
+            decoration: const BoxDecoration(
+              color: Color(0x33FFFFFF),
+              shape: BoxShape.circle,
+            ),
+            child: const Icon(
+              Icons.check_circle,
+              color: AppColors.white,
+              size: 24,
+            ),
+          ),
+          const SizedBox(width: 12),
+          const Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Semua Tagihan Lunas',
+                  style: TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                    color: AppColors.white,
+                  ),
+                ),
+                Text(
+                  'Terima kasih telah membayar tepat waktu',
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: Color(0xCCFFFFFF),
+                  ),
                 ),
               ],
             ),
-            child: Icon(icon, color: iconColor, size: 26),
           ),
-          const SizedBox(height: 8),
-          Text(
-            label,
-            textAlign: TextAlign.center,
-            style: const TextStyle(
-              fontSize: 11,
-              fontWeight: FontWeight.w500,
-              color: Color(0xFF1A1A1A),
-              height: 1.3,
+        ],
+      ),
+    );
+  }
+
+  // --- WIDGET: BAR CHART ---
+  Widget _buildChartCard(List<_ChartData> data) {
+    final maxY = data.fold<int>(0, (max, d) {
+      final total = d.lunas + d.denda + d.belum;
+      return total > max ? total : max;
+    });
+    final interval = maxY > 0 ? (maxY / 5).ceilToDouble() : 10000.0;
+
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: AppColors.white,
+        borderRadius: BorderRadius.circular(20),
+        boxShadow: const [
+          BoxShadow(
+            color: Color(0x0A000000),
+            blurRadius: 12,
+            offset: Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Column(
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              _chartLegend('Lunas', AppColors.mainColor),
+              const SizedBox(width: 16),
+              _chartLegend('Denda', AppColors.error),
+              const SizedBox(width: 16),
+              _chartLegend('Belum', AppColors.grey400),
+            ],
+          ),
+          const SizedBox(height: 12),
+          SizedBox(
+            height: 180,
+            child: BarChart(
+              BarChartData(
+                alignment: BarChartAlignment.spaceAround,
+                maxY: maxY > 0 ? maxY * 1.2 : 100000,
+                barTouchData: BarTouchData(enabled: false),
+                titlesData: FlTitlesData(
+                  show: true,
+                  bottomTitles: AxisTitles(
+                    sideTitles: SideTitles(
+                      showTitles: true,
+                      getTitlesWidget: (value, meta) {
+                        final index = value.toInt();
+                        if (index >= 0 && index < data.length) {
+                          return Padding(
+                            padding: const EdgeInsets.only(top: 8),
+                            child: Text(
+                              data[index].label,
+                              style: TextStyle(
+                                fontSize: 11,
+                                color: AppColors.grey600,
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
+                          );
+                        }
+                        return const SizedBox();
+                      },
+                      reservedSize: 30,
+                    ),
+                  ),
+                  leftTitles: AxisTitles(
+                    sideTitles: SideTitles(
+                      showTitles: true,
+                      reservedSize: 40,
+                      interval: interval > 0 ? interval : 10000,
+                      getTitlesWidget: (value, meta) {
+                        if (value == 0) return const SizedBox();
+                        return Text(
+                          '${(value / 1000).toStringAsFixed(0)}rb',
+                          style: TextStyle(
+                            fontSize: 10,
+                            color: AppColors.grey500,
+                          ),
+                        );
+                      },
+                    ),
+                  ),
+                  topTitles: const AxisTitles(
+                    sideTitles: SideTitles(showTitles: false),
+                  ),
+                  rightTitles: const AxisTitles(
+                    sideTitles: SideTitles(showTitles: false),
+                  ),
+                ),
+                gridData: FlGridData(
+                  show: true,
+                  drawVerticalLine: false,
+                  horizontalInterval: interval > 0 ? interval : 10000.0,
+                  getDrawingHorizontalLine: (value) {
+                    return FlLine(
+                      color: const Color(0xFFE0E0E0),
+                      strokeWidth: 1,
+                    );
+                  },
+                ),
+                borderData: FlBorderData(show: false),
+                barGroups: List.generate(data.length, (index) {
+                  final d = data[index];
+                  return BarChartGroupData(
+                    x: index,
+                    barRods: [
+                      BarChartRodData(
+                        toY: (d.lunas + d.denda + d.belum).toDouble(),
+                        width: 22,
+                        borderRadius: const BorderRadius.only(
+                          topLeft: Radius.circular(6),
+                          topRight: Radius.circular(6),
+                        ),
+                        rodStackItems: [
+                          BarChartRodStackItem(
+                            0,
+                            d.lunas.toDouble(),
+                            AppColors.mainColor,
+                          ),
+                          BarChartRodStackItem(
+                            d.lunas.toDouble(),
+                            (d.lunas + d.denda).toDouble(),
+                            AppColors.error,
+                          ),
+                          BarChartRodStackItem(
+                            (d.lunas + d.denda).toDouble(),
+                            (d.lunas + d.denda + d.belum).toDouble(),
+                            AppColors.grey400,
+                          ),
+                        ],
+                      ),
+                    ],
+                  );
+                }),
+              ),
             ),
           ),
         ],
@@ -547,279 +790,234 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen>
     );
   }
 
-  Widget _buildUsageCard(dynamic bill, int maxUsage) {
-    final usage = ((bill['usage_value'] ?? 0) as num).toInt();
+  Widget _chartLegend(String label, Color color) {
+    return Row(
+      children: [
+        Container(
+          width: 12,
+          height: 12,
+          decoration: BoxDecoration(
+            color: color,
+            borderRadius: BorderRadius.circular(3),
+          ),
+        ),
+        const SizedBox(width: 6),
+        Text(
+          label,
+          style: TextStyle(
+            fontSize: 12,
+            color: AppColors.grey600,
+            fontWeight: FontWeight.w500,
+          ),
+        ),
+      ],
+    );
+  }
+
+  // --- WIDGET: STAT SUMMARY ---
+  Widget _statSummaryCard({
+    required String value,
+    required String label,
+    required Color color,
+    required Color bgColor,
+  }) {
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: 14),
+      decoration: BoxDecoration(
+        color: bgColor,
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: Column(
+        children: [
+          Text(
+            value,
+            style: TextStyle(
+              fontSize: 24,
+              fontWeight: FontWeight.bold,
+              color: color,
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            label,
+            style: TextStyle(
+              fontSize: 12,
+              color: color.withOpacity(0.8),
+              fontWeight: FontWeight.w500,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // --- WIDGET: TAGIHAN ITEM ---
+  Widget _buildBillItem(dynamic bill) {
     final month = ((bill['month'] ?? 1) as num).toInt();
     final year = ((bill['year'] ?? 2026) as num).toInt();
-    final monthNames = ['', 'Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni',
-        'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'];
-    final percentage = maxUsage > 0 ? (usage / maxUsage).clamp(0.0, 1.0) : 0.0;
-    final remaining = (maxUsage - usage).clamp(0, maxUsage);
+    final price = ((bill['price'] ?? 0) as num).toInt();
+    final isPaid = bill['paid'] == true;
+    final now = DateTime.now();
+    final isOverdue =
+        !isPaid && (now.year > year || (now.year == year && now.month > month));
+    final measurement = bill['measurement_number']?.toString() ?? '-';
+
+    Color statusColor;
+    Color statusBg;
+    String statusText;
+    IconData statusIcon;
+
+    if (isPaid) {
+      statusColor = AppColors.success;
+      statusBg = const Color(0xFFE8F5E9);
+      statusText = 'Lunas';
+      statusIcon = Icons.check_circle;
+    } else if (isOverdue) {
+      statusColor = AppColors.error;
+      statusBg = const Color(0xFFFFEBEE);
+      statusText = 'Terlambat';
+      statusIcon = Icons.warning;
+    } else {
+      statusColor = const Color(0xFFFF9800);
+      statusBg = const Color(0xFFFFF3E0);
+      statusText = 'Belum Lunas';
+      statusIcon = Icons.access_time;
+    }
 
     return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(20),
-      decoration: const BoxDecoration(
-        color: Color(0xFF2D2D2D),
-        borderRadius: BorderRadius.all(Radius.circular(24)),
+      margin: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: AppColors.white,
+        borderRadius: BorderRadius.circular(20),
+        boxShadow: const [
+          BoxShadow(
+            color: Color(0x0A000000),
+            blurRadius: 12,
+            offset: Offset(0, 4),
+          ),
+        ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            'Bulan ${monthNames[month]} $year',
-            style: const TextStyle(
-              fontSize: 13,
-              color: AppColors.grey400,
-              fontWeight: FontWeight.w500,
-            ),
-          ),
-          const SizedBox(height: 12),
           Row(
-            crossAxisAlignment: CrossAxisAlignment.end,
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              RichText(
-                text: TextSpan(
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    TextSpan(
-                      text: '$usage',
+                    Text(
+                      'Tagihan ${_monthLong(month)} $year',
                       style: const TextStyle(
-                        fontSize: 32,
+                        fontSize: 16,
                         fontWeight: FontWeight.bold,
-                        color: AppColors.white,
-                        letterSpacing: -1,
+                        color: Color(0xFF1A237E),
                       ),
                     ),
-                    const TextSpan(
-                      text: ' Meter',
+                    const SizedBox(height: 4),
+                    Text(
+                      'BILL-$year-${month.toString().padLeft(2, '0')}-$measurement',
                       style: TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.w600,
-                        color: AppColors.white,
-                      ),
-                    ),
-                    TextSpan(
-                      text: ' / $maxUsage',
-                      style: const TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.w500,
+                        fontSize: 12,
                         color: AppColors.grey500,
                       ),
                     ),
                   ],
                 ),
               ),
-              const Spacer(),
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.end,
-                children: [
-                  Text(
-                    '${(percentage * 100).toInt()}% digunakan',
-                    style: const TextStyle(
-                      fontSize: 12,
-                      fontWeight: FontWeight.w600,
-                      color: AppColors.success,
-                    ),
-                  ),
-                  const SizedBox(height: 2),
-                  Text(
-                    'Sisa ${remaining}m',
-                    style: TextStyle(
-                      fontSize: 11,
-                      color: AppColors.grey400,
-                    ),
-                  ),
-                ],
-              ),
-            ],
-          ),
-          const SizedBox(height: 16),
-          Stack(
-            children: [
               Container(
-                height: 10,
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                 decoration: BoxDecoration(
-                  color: AppColors.grey800,
-                  borderRadius: BorderRadius.circular(5),
+                  color: statusBg,
+                  borderRadius: BorderRadius.circular(20),
                 ),
-              ),
-              FractionallySizedBox(
-                widthFactor: percentage,
-                child: Container(
-                  height: 10,
-                  decoration: const BoxDecoration(
-                    gradient: LinearGradient(
-                      colors: [Color(0xFF4A90E2), Color(0xFF357ABD)],
-                    ),
-                    borderRadius: BorderRadius.all(Radius.circular(5)),
+                child: Text(
+                  statusText,
+                  style: TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w600,
+                    color: statusColor,
                   ),
                 ),
               ),
             ],
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: 12),
           Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text('0m', style: TextStyle(fontSize: 11, color: AppColors.grey500)),
-              Text('${maxUsage}m', style: TextStyle(fontSize: 11, color: AppColors.grey500)),
+              Icon(statusIcon, color: statusColor, size: 20),
+              const SizedBox(width: 8),
+              Text(
+                formatRupiah(price),
+                style: TextStyle(
+                  fontSize: 20,
+                  fontWeight: FontWeight.bold,
+                  color: statusColor,
+                ),
+              ),
             ],
           ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildEmptyUsageCard() {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(24),
-      decoration: const BoxDecoration(
-        color: Color(0xFF2D2D2D),
-        borderRadius: BorderRadius.all(Radius.circular(24)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            'Penggunaan Air',
-            style: TextStyle(fontSize: 13, color: AppColors.grey400),
-          ),
-          const SizedBox(height: 12),
-          const Text(
-            '0 Meter',
-            style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold, color: AppColors.white),
-          ),
-          const SizedBox(height: 12),
-          Container(
-            height: 10,
-            decoration: BoxDecoration(
-              color: AppColors.grey800,
-              borderRadius: BorderRadius.circular(5),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildHistoryItem(dynamic bill) {
-    final monthNames = ['', 'Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun',
-        'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des'];
-    final month = ((bill['month'] ?? 1) as num).toInt();
-    final year = ((bill['year'] ?? 2026) as num).toInt();
-    final isPaid = bill['paid'] == true;
-
-    Color titleColor;
-    Color badgeColor;
-    Color badgeBgColor;
-    String badgeText;
-    Color iconColor;
-    Color iconBgColor;
-
-    if (isPaid) {
-      titleColor = const Color(0xFF27AE60);
-      badgeColor = const Color(0xFF27AE60);
-      badgeBgColor = const Color(0xFFE8F8F0);
-      badgeText = 'Lunas';
-      iconColor = const Color(0xFF27AE60);
-      iconBgColor = const Color(0xFFE8F8F0);
-    } else {
-      final now = DateTime.now();
-      final isOverdue = now.year > year || (now.year == year && now.month > month);
-      if (isOverdue) {
-        titleColor = const Color(0xFFE67E22);
-        badgeColor = const Color(0xFFE67E22);
-        badgeBgColor = const Color(0xFFFFF3E0);
-        badgeText = 'Menunggak';
-        iconColor = const Color(0xFFE67E22);
-        iconBgColor = const Color(0xFFFFF3E0);
-      } else {
-        titleColor = const Color(0xFF27AE60);
-        badgeColor = const Color(0xFF27AE60);
-        badgeBgColor = const Color(0xFFE8F8F0);
-        badgeText = 'Baru';
-        iconColor = const Color(0xFF27AE60);
-        iconBgColor = const Color(0xFFE8F8F0);
-      }
-    }
-
-    return Container(
-      margin: const EdgeInsets.only(bottom: 10),
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: AppColors.white,
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: const [
-          BoxShadow(
-            color: Color(0x08000000),
-            blurRadius: 8,
-            offset: Offset(0, 2),
-          ),
-        ],
-      ),
-      child: Row(
-        children: [
-          Container(
-            width: 44,
-            height: 44,
-            decoration: BoxDecoration(
-              color: iconBgColor,
-              shape: BoxShape.circle,
-            ),
-            child: Icon(
-              isPaid ? Icons.check : Icons.access_time,
-              color: iconColor,
-              size: 20,
-            ),
-          ),
-          const SizedBox(width: 14),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+          if (!isPaid) ...[
+            const SizedBox(height: 12),
+            Row(
               children: [
-                Text(
-                  'Tagihan ${monthNames[month]} $year',
-                  style: TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w700,
-                    color: titleColor,
+                Expanded(
+                  child: Text(
+                    'Jatuh Tempo 30 ${_monthLong(month)} $year',
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: AppColors.grey600,
+                    ),
                   ),
                 ),
-                const SizedBox(height: 3),
-                Text(
-                  isPaid
-                      ? 'Dibayar • ${bill['updatedAt'] != null ? formatDate(bill['updatedAt'].toString()) : '$monthNames[$month] $year'}'
-                      : 'Belum dibayar',
-                  style: TextStyle(
-                    fontSize: 12,
-                    color: AppColors.grey500,
+                GestureDetector(
+                  onTap: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => PaymentScreen(bill: bill),
+                      ),
+                    ).then((_) => _loadData());
+                  },
+                  child: Container(
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                    decoration: BoxDecoration(
+                      color: AppColors.mainColor,
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: const Row(
+                      children: [
+                        Icon(
+                          Icons.payment,
+                          color: AppColors.white,
+                          size: 16,
+                        ),
+                        SizedBox(width: 6),
+                        Text(
+                          'Bayar',
+                          style: TextStyle(
+                            color: AppColors.white,
+                            fontSize: 13,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
                 ),
               ],
             ),
-          ),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-            decoration: BoxDecoration(
-              color: badgeBgColor,
-              borderRadius: BorderRadius.circular(20),
-            ),
-            child: Text(
-              badgeText,
-              style: TextStyle(
-                fontSize: 11,
-                fontWeight: FontWeight.w600,
-                color: badgeColor,
-              ),
-            ),
-          ),
+          ],
         ],
       ),
     );
   }
 
-  Widget _buildEmptyHistory() {
+  Widget _buildEmptyBills() {
     return Container(
       padding: const EdgeInsets.all(32),
       decoration: BoxDecoration(
@@ -829,15 +1027,39 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen>
       child: Center(
         child: Column(
           children: [
-            Icon(Icons.receipt_long_outlined, size: 48, color: AppColors.grey300),
+            Icon(Icons.receipt_long_outlined,
+                size: 56, color: AppColors.grey300),
             const SizedBox(height: 12),
             Text(
-              'Belum ada riwayat tagihan',
-              style: TextStyle(color: AppColors.grey500, fontWeight: FontWeight.w500),
+              'Belum ada tagihan',
+              style: TextStyle(
+                color: AppColors.grey500,
+                fontWeight: FontWeight.w500,
+                fontSize: 16,
+              ),
             ),
           ],
         ),
       ),
     );
   }
+}
+
+// --- Helper Class untuk Chart ---
+class _ChartData {
+  final int month;
+  final int year;
+  final String label;
+  final int lunas;
+  final int denda;
+  final int belum;
+
+  _ChartData({
+    required this.month,
+    required this.year,
+    required this.label,
+    required this.lunas,
+    required this.denda,
+    required this.belum,
+  });
 }

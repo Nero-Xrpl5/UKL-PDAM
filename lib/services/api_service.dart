@@ -1,8 +1,21 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'package:http/http.dart' as http;
 import 'package:http_parser/http_parser.dart';
 import '../constants/api.dart';
+
+class ApiException implements Exception {
+  final String message;
+  final int? statusCode;
+  ApiException(this.message, {this.statusCode});
+  @override
+  String toString() => message;
+}
+
+class UnauthorizedException extends ApiException {
+  UnauthorizedException(String message) : super(message, statusCode: 401);
+}
 
 class ApiService {
   static final ApiService _instance = ApiService._internal();
@@ -10,17 +23,14 @@ class ApiService {
   ApiService._internal();
 
   String? _token;
+  void Function()? onUnauthorized;
 
-  void setToken(String token) {
-    _token = token;
-  }
-
-  void clearToken() {
-    _token = null;
-  }
+  void setToken(String token) => _token = token;
+  void clearToken() => _token = null;
+  void setOnUnauthorized(void Function() callback) => onUnauthorized = callback;
 
   Map<String, String> get _headers {
-    final headers = {
+    final headers = <String, String>{
       'Content-Type': 'application/json',
       'app-key': ApiConfig.appKey,
     };
@@ -30,36 +40,48 @@ class ApiService {
     return headers;
   }
 
+  Future<dynamic> _safeRequest(Future<http.Response> Function() request) async {
+    try {
+      final response = await request().timeout(const Duration(seconds: 15));
+      return _processResponse(response);
+    } on SocketException catch (_) {
+      throw ApiException('Tidak ada koneksi internet. Periksa jaringan Anda.');
+    } on TimeoutException catch (_) {
+      throw ApiException('Koneksi timeout. Server terlalu lambat, coba lagi.');
+    } on FormatException catch (_) {
+      throw ApiException('Format respons server tidak valid.');
+    } catch (e) {
+      if (e is ApiException) rethrow;
+      throw ApiException('Terjadi kesalahan: ${e.toString()}');
+    }
+  }
+
   Future<dynamic> get(String endpoint) async {
     final url = Uri.parse('${ApiConfig.baseUrl}$endpoint');
-    final response = await http.get(url, headers: _headers);
-    return _processResponse(response);
+    return _safeRequest(() => http.get(url, headers: _headers));
   }
 
   Future<dynamic> post(String endpoint, {Map<String, dynamic>? body}) async {
     final url = Uri.parse('${ApiConfig.baseUrl}$endpoint');
-    final response = await http.post(
-      url,
-      headers: _headers,
-      body: body != null ? jsonEncode(body) : null,
-    );
-    return _processResponse(response);
+    return _safeRequest(() => http.post(
+          url,
+          headers: _headers,
+          body: body != null ? jsonEncode(body) : null,
+        ));
   }
 
   Future<dynamic> patch(String endpoint, {Map<String, dynamic>? body}) async {
     final url = Uri.parse('${ApiConfig.baseUrl}$endpoint');
-    final response = await http.patch(
-      url,
-      headers: _headers,
-      body: body != null ? jsonEncode(body) : null,
-    );
-    return _processResponse(response);
+    return _safeRequest(() => http.patch(
+          url,
+          headers: _headers,
+          body: body != null ? jsonEncode(body) : null,
+        ));
   }
 
   Future<dynamic> delete(String endpoint) async {
     final url = Uri.parse('${ApiConfig.baseUrl}$endpoint');
-    final response = await http.delete(url, headers: _headers);
-    return _processResponse(response);
+    return _safeRequest(() => http.delete(url, headers: _headers));
   }
 
   Future<dynamic> postMultipart(
@@ -76,9 +98,7 @@ class ApiService {
       request.headers['Authorization'] = 'Bearer $_token';
     }
 
-    fields.forEach((key, value) {
-      request.fields[key] = value;
-    });
+    fields.forEach((key, value) => request.fields[key] = value);
 
     final multipartFile = await http.MultipartFile.fromPath(
       fileField,
@@ -87,9 +107,18 @@ class ApiService {
     );
     request.files.add(multipartFile);
 
-    final streamedResponse = await request.send();
-    final response = await http.Response.fromStream(streamedResponse);
-    return _processResponse(response);
+    try {
+      final streamedResponse = await request.send().timeout(const Duration(seconds: 30));
+      final response = await http.Response.fromStream(streamedResponse)
+          .timeout(const Duration(seconds: 10));
+      return _processResponse(response);
+    } on SocketException catch (_) {
+      throw ApiException('Tidak ada koneksi internet.');
+    } on TimeoutException catch (_) {
+      throw ApiException('Upload timeout. Coba lagi.');
+    } catch (e) {
+      throw ApiException('Upload gagal: ${e.toString()}');
+    }
   }
 
   dynamic _processResponse(http.Response response) {
@@ -97,12 +126,35 @@ class ApiService {
 
     if (response.statusCode >= 200 && response.statusCode < 300) {
       return body;
-    } else {
-      String message = 'Error ${response.statusCode}';
-      if (body != null && body is Map && body['message'] != null) {
-        message = body['message'];
-      }
-      throw Exception(message);
     }
+
+    String message = 'Error ${response.statusCode}';
+    if (body != null && body is Map && body['message'] != null) {
+      message = body['message'].toString();
+    } else {
+      switch (response.statusCode) {
+        case 400:
+          message = 'Permintaan tidak valid (400).';
+          break;
+        case 401:
+          message = 'Sesi tidak valid. Silakan login ulang.';
+          break;
+        case 403:
+          message = 'Akses ditolak (403).';
+          break;
+        case 404:
+          message = 'Data tidak ditemukan (404).';
+          break;
+        case 500:
+          message = 'Server sedang bermasalah (500).';
+          break;
+      }
+    }
+
+    if (response.statusCode == 401 || response.statusCode == 403) {
+      onUnauthorized?.call();
+      throw UnauthorizedException(message);
+    }
+    throw ApiException(message, statusCode: response.statusCode);
   }
 }

@@ -1,14 +1,14 @@
+import 'dart:core';
+
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:tirta_app/screens/bill_list_screen.dart';
 import '../constants/colors.dart';
-import '../constants/api.dart';
+import '../utils/helpers.dart';
 import '../providers/app_provider.dart';
 import '../services/bill_api.dart';
-import '../services/customer_api.dart';
-import '../services/payment_api.dart';
-import '../widgets/custom_button.dart';
-import '../widgets/custom_card.dart';
-import '../widgets/status_badge.dart';
+import '../widgets/shimmer_card.dart';
+import 'payment_screen.dart';
 
 class BillListScreen extends StatefulWidget {
   const BillListScreen({super.key});
@@ -19,259 +19,502 @@ class BillListScreen extends StatefulWidget {
 
 class _BillListScreenState extends State<BillListScreen> {
   final BillApi _billApi = BillApi();
-  final CustomerApi _customerApi = CustomerApi();
-  final PaymentApi _paymentApi = PaymentApi();
-
-  List bills = [];
-  List customers = [];
-  List payments = [];
+  List<dynamic> myBills = [];
   bool isLoading = true;
-  String filter = 'Semua';
-
-  final _usageCtrl = TextEditingController();
-  final _meterCtrl = TextEditingController();
-  int? selectedCustomerId;
-  int selectedMonth = DateTime.now().month;
-  int selectedYear = DateTime.now().year;
-  int? _editingBillId;
+  String? errorMessage;
+  String _filter = 'Semua'; // Semua, Belum, Lunas
 
   @override
   void initState() {
     super.initState();
-    _loadData();
+    _loadBills();
   }
 
-  Future _loadData() async {
-    setState(() => isLoading = true);
+  Future<void> _loadBills() async {
+    setState(() {
+      isLoading = true;
+      errorMessage = null;
+    });
     try {
-      final isAdmin = context.read<AppProvider>().isAdmin;
-      List b;
-      List p = [];
-
-      if (isAdmin) {
-        b = await _billApi.getBills();
-        p = await _paymentApi.getPayments();
-      } else {
-        b = await _billApi.getMyBills();
-      }
-
-      final c = await _customerApi.getCustomers();
+      final bills = await _billApi.getMyBills(quantity: 100);
       if (mounted) {
         setState(() {
-          bills = b;
-          customers = c;
-          payments = p;
+          myBills = bills;
           isLoading = false;
         });
       }
     } catch (e) {
       if (mounted) {
-        setState(() => isLoading = false);
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Gagal memuat: $e'),
-            backgroundColor: AppColors.error,
-          ),
-        );
+        setState(() {
+          errorMessage = e.toString();
+          isLoading = false;
+        });
       }
     }
   }
 
-  Future _createOrUpdateBill() async {
-    if (selectedCustomerId == null || _usageCtrl.text.isEmpty) return;
-    final data = {
-      'customer_id': selectedCustomerId,
-      'month': selectedMonth,
-      'year': selectedYear,
-      'measurement_number': _meterCtrl.text,
-      'usage_value': int.parse(_usageCtrl.text),
-    };
-    try {
-      if (_editingBillId != null) {
-        await _billApi.updateBill(_editingBillId!, data);
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Tagihan berhasil diupdate!'),
-              backgroundColor: AppColors.success,
-            ),
-          );
-        }
-      } else {
-        await _billApi.createBill(data);
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Tagihan berhasil dibuat!'),
-              backgroundColor: AppColors.success,
-            ),
-          );
-        }
-      }
-      _usageCtrl.clear();
-      _meterCtrl.clear();
-      setState(() {
-        _editingBillId = null;
-        selectedCustomerId = null;
-      });
-      _loadData();
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Error: $e'),
-            backgroundColor: AppColors.error,
-          ),
-        );
-      }
+  String get _greeting {
+    final hour = DateTime.now().hour;
+    if (hour < 11) return 'Selamat Pagi';
+    if (hour < 15) return 'Selamat Siang';
+    if (hour < 18) return 'Selamat Sore';
+    return 'Selamat Malam';
+  }
+
+  List<dynamic> get _filteredBills {
+    if (_filter == 'Belum') {
+      return myBills.where((b) => b['paid'] != true).toList();
+    } else if (_filter == 'Lunas') {
+      return myBills.where((b) => b['paid'] == true).toList();
     }
+    return myBills;
   }
 
-  void _startEditBill(dynamic bill) {
-    setState(() {
-      _editingBillId = (bill['id'] as num).toInt();
-      selectedCustomerId = (bill['customer_id'] as num).toInt();
-      selectedMonth = (bill['month'] ?? DateTime.now().month) is int
-          ? bill['month']
-          : int.tryParse(bill['month'].toString()) ?? DateTime.now().month;
-      selectedYear = (bill['year'] ?? DateTime.now().year) is int
-          ? bill['year']
-          : int.tryParse(bill['year'].toString()) ?? DateTime.now().year;
-      _meterCtrl.text = bill['measurement_number']?.toString() ?? '';
-      _usageCtrl.text = bill['usage_value']?.toString() ?? '';
-    });
+  dynamic get _currentMonthBill {
+    final now = DateTime.now();
+    final current = myBills.where((b) {
+      final month = ((b['month'] ?? 0) as num).toInt();
+      final year = ((b['year'] ?? 0) as num).toInt();
+      return month == now.month && year == now.year;
+    }).toList();
+    return current.isNotEmpty ? current.first : null;
   }
 
-  void _cancelEdit() {
-    setState(() {
-      _editingBillId = null;
-      selectedCustomerId = null;
-      selectedMonth = DateTime.now().month;
-      selectedYear = DateTime.now().year;
-    });
-    _usageCtrl.clear();
-    _meterCtrl.clear();
+  String _monthName(int m) {
+    const names = [
+      '',
+      'Januari',
+      'Februari',
+      'Maret',
+      'April',
+      'Mei',
+      'Juni',
+      'Juli',
+      'Agustus',
+      'September',
+      'Oktober',
+      'November',
+      'Desember'
+    ];
+    return names[m];
   }
 
-  Future _deleteBill(int id) async {
-    try {
-      await _billApi.deleteBill(id);
-      _loadData();
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Error: $e'),
-            backgroundColor: AppColors.error,
-          ),
-        );
-      }
-    }
-  }
+  @override
+  Widget build(BuildContext context) {
+    final user = context.watch<AppProvider>().user;
+    final currentBill = _currentMonthBill;
+    final filtered = _filteredBills;
 
-  Future _verifyPayment(int paymentId) async {
-    try {
-      await _paymentApi.verifyPayment(paymentId);
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Pembayaran diverifikasi!'),
-            backgroundColor: AppColors.success,
-          ),
-        );
-      }
-      _loadData();
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Error: $e'),
-            backgroundColor: AppColors.error,
-          ),
-        );
-      }
-    }
-  }
-
-  Future _rejectPayment(int paymentId) async {
-    try {
-      await _paymentApi.rejectPayment(paymentId);
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Pembayaran ditolak!'),
-            backgroundColor: AppColors.warning,
-          ),
-        );
-      }
-      _loadData();
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Error: $e'),
-            backgroundColor: AppColors.error,
-          ),
-        );
-      }
-    }
-  }
-
-  void _showPaymentProofImage(String filename) {
-    final url = '${ApiConfig.baseUrl}${ApiConfig.paymentProof}/$filename';
-    showDialog(
-      context: context,
-      builder: (context) => Dialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            ClipRRect(
-              borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
-              child: Image.network(
-                url,
-                fit: BoxFit.cover,
-                loadingBuilder: (context, child, progress) {
-                  if (progress == null) return child;
-                  return Container(
-                    height: 250,
-                    alignment: Alignment.center,
-                    child: const CircularProgressIndicator(),
-                  );
-                },
-                errorBuilder: (context, error, stackTrace) => Container(
-                  height: 200,
-                  color: AppColors.grey100,
-                  alignment: Alignment.center,
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Icon(Icons.broken_image, size: 48, color: AppColors.grey400),
-                      const SizedBox(height: 8),
-                      Text(
-                        'Gagal memuat gambar',
-                        style: TextStyle(color: AppColors.grey500),
-                      ),
-                    ],
+    return Scaffold(
+      backgroundColor: AppColors.bgLight,
+      body: RefreshIndicator(
+        onRefresh: _loadBills,
+        child: CustomScrollView(
+          physics: const AlwaysScrollableScrollPhysics(),
+          slivers: [
+            // --- HEADER GRADIENT ---
+            SliverToBoxAdapter(
+              child: Container(
+                decoration: const BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                    colors: [Color(0xFF4DA6FF), Color(0xFF0077E6)],
+                  ),
+                  borderRadius: BorderRadius.only(
+                    bottomLeft: Radius.circular(30),
+                    bottomRight: Radius.circular(30),
+                  ),
+                ),
+                child: SafeArea(
+                  bottom: false,
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(20, 16, 20, 24),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Row(
+                              children: [
+                                Container(
+                                  width: 44,
+                                  height: 44,
+                                  decoration: BoxDecoration(
+                                    color: const Color(0x33FFFFFF),
+                                    shape: BoxShape.circle,
+                                    border: Border.all(
+                                      color: const Color(0x4DFFFFFF),
+                                      width: 2,
+                                    ),
+                                    image: const DecorationImage(
+                                      image: AssetImage(
+                                          'assets/images/avatar_default.png'),
+                                      fit: BoxFit.cover,
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(width: 12),
+                                Column(
+                                  crossAxisAlignment:
+                                      CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      _greeting,
+                                      style: TextStyle(
+                                        fontSize: 13,
+                                        color: AppColors.white70,
+                                        fontWeight: FontWeight.w500,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 2),
+                                    Text(
+                                      user?.name ?? 'User',
+                                      style: const TextStyle(
+                                        fontSize: 18,
+                                        fontWeight: FontWeight.bold,
+                                        color: AppColors.white,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ],
+                            ),
+                            Container(
+                              padding: const EdgeInsets.all(10),
+                              decoration: const BoxDecoration(
+                                color: Color(0x26FFFFFF),
+                                shape: BoxShape.circle,
+                              ),
+                              child: const Icon(
+                                Icons.notifications_outlined,
+                                color: AppColors.white,
+                                size: 22,
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 20),
+                        // --- KARTU TAGIHAN BULAN INI ---
+                        if (isLoading)
+                          const ShimmerCard(
+                              height: 180, margin: EdgeInsets.zero)
+                        else if (currentBill != null)
+                          _buildCurrentBillCard(currentBill)
+                        else
+                          _buildNoBillCard(),
+                      ],
+                    ),
                   ),
                 ),
               ),
             ),
-            Padding(
-              padding: const EdgeInsets.all(16),
-              child: SizedBox(
-                width: double.infinity,
-                child: ElevatedButton(
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: AppColors.mainColor,
-                    foregroundColor: AppColors.white,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                  ),
-                  onPressed: () => Navigator.pop(context),
-                  child: const Text('Tutup'),
+
+            // --- FILTER CHIPS ---
+            SliverToBoxAdapter(
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(20, 20, 20, 12),
+                child: Row(
+                  children: [
+                    _filterChip('Semua', _filter == 'Semua'),
+                    const SizedBox(width: 10),
+                    _filterChip('Belum', _filter == 'Belum'),
+                    const SizedBox(width: 10),
+                    _filterChip('Lunas', _filter == 'Lunas'),
+                  ],
                 ),
+              ),
+            ),
+
+            // --- LIST TAGIHAN ---
+            SliverList(
+              delegate: SliverChildBuilderDelegate(
+                (context, index) {
+                  if (isLoading) {
+                    return const Padding(
+                      padding: EdgeInsets.symmetric(
+                          horizontal: 20, vertical: 6),
+                      child: ShimmerCard(height: 120),
+                    );
+                  }
+                  if (errorMessage != null && index == 0) {
+                    return Padding(
+                      padding: const EdgeInsets.all(20),
+                      child: Center(
+                        child: Column(
+                          children: [
+                            const Icon(Icons.error_outline,
+                                color: AppColors.error, size: 48),
+                            const SizedBox(height: 8),
+                            Text(errorMessage!,
+                                textAlign: TextAlign.center),
+                            TextButton(
+                              onPressed: _loadBills,
+                              child: const Text('Coba Lagi'),
+                            ),
+                          ],
+                        ),
+                      ),
+                    );
+                  }
+                  if (filtered.isEmpty && index == 0) {
+                    return Padding(
+                      padding: const EdgeInsets.all(40),
+                      child: Center(
+                        child: Column(
+                          children: [
+                            Icon(Icons.receipt_long_outlined,
+                                size: 64, color: AppColors.grey300),
+                            const SizedBox(height: 12),
+                            Text(
+                              'Tidak ada tagihan',
+                              style: TextStyle(
+                                color: AppColors.grey500,
+                                fontSize: 16,
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    );
+                  }
+                  if (index >= filtered.length) return null;
+                  return _buildBillItem(filtered[index]);
+                },
+                childCount: isLoading
+                    ? 3
+                    : errorMessage != null
+                        ? 1
+                        : filtered.isEmpty
+                            ? 1
+                            : filtered.length,
+              ),
+            ),
+
+            const SliverToBoxAdapter(
+              child: SizedBox(height: 24),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _filterChip(String label, bool isActive) {
+    return Expanded(
+      child: GestureDetector(
+        onTap: () => setState(() => _filter = label),
+        child: Container(
+          padding: const EdgeInsets.symmetric(vertical: 10),
+          decoration: BoxDecoration(
+            color: isActive ? AppColors.mainColor : AppColors.white,
+            borderRadius: BorderRadius.circular(25),
+            border: isActive
+                ? null
+                : Border.all(color: AppColors.grey300),
+          ),
+          child: Center(
+            child: Text(
+              label,
+              style: TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.w600,
+                color: isActive ? AppColors.white : AppColors.grey600,
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildCurrentBillCard(dynamic bill) {
+    final month = ((bill['month'] ?? 1) as num).toInt();
+    final year = ((bill['year'] ?? 2026) as num).toInt();
+    final price = ((bill['price'] ?? 0) as num).toInt();
+    final isPaid = bill['paid'] == true;
+
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: const Color(0xFF06C270),
+        borderRadius: BorderRadius.circular(20),
+        boxShadow: [
+          BoxShadow(
+            color: const Color(0x4006C270),
+            blurRadius: 12,
+            offset: const Offset(0, 6),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                'Tagihan Bulan Ini • ${_monthName(month)} $year',
+                style: const TextStyle(
+                  fontSize: 13,
+                  color: Color(0xCCFFFFFF),
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+              if (isPaid)
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: 8, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: const Color(0x33FFFFFF),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: const Row(
+                    children: [
+                      Icon(Icons.check_circle,
+                          color: AppColors.white, size: 14),
+                      SizedBox(width: 4),
+                      Text(
+                        'Lunas',
+                        style: TextStyle(
+                          fontSize: 11,
+                          color: AppColors.white,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Text(
+            formatRupiah(price),
+            style: const TextStyle(
+              fontSize: 36,
+              fontWeight: FontWeight.bold,
+              color: AppColors.white,
+              letterSpacing: -0.5,
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            'Jatuh Tempo: 30 ${_monthName(month)} $year',
+            style: const TextStyle(
+              fontSize: 13,
+              color: Color(0xCCFFFFFF),
+            ),
+          ),
+          const SizedBox(height: 16),
+          Row(
+            children: [
+              if (!isPaid)
+                Expanded(
+                  child: _actionButton(
+                    icon: Icons.payment,
+                    label: 'Bayar Sekarang',
+                    onTap: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => PaymentScreen(bill: bill),
+                        ),
+                      ).then((_) => _loadBills());
+                    },
+                  ),
+                ),
+              if (!isPaid) const SizedBox(width: 12),
+              Expanded(
+                child: _actionButton(
+                  icon: Icons.visibility,
+                  label: 'Lihat Tagihan',
+                  isSecondary: true,
+                  onTap: () => _showBillDetail(bill),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildNoBillCard() {
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: AppColors.white,
+        borderRadius: BorderRadius.circular(20),
+      ),
+      child: const Row(
+        children: [
+          Icon(Icons.check_circle,
+              color: AppColors.success, size: 32),
+          SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Tidak Ada Tagihan Bulan Ini',
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                    color: AppColors.dark1,
+                  ),
+                ),
+                Text(
+                  'Semua tagihan sudah terbayar atau belum ada tagihan baru',
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: AppColors.grey500,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _actionButton({
+    required IconData icon,
+    required String label,
+    required VoidCallback onTap,
+    bool isSecondary = false,
+  }) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 12),
+        decoration: BoxDecoration(
+          color: isSecondary
+              ? const Color(0x33FFFFFF)
+              : const Color(0xFFFFFFFF),
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(
+              icon,
+              size: 18,
+              color: isSecondary
+                  ? AppColors.white
+                  : const Color(0xFF06C270),
+            ),
+            const SizedBox(width: 8),
+            Text(
+              label,
+              style: TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+                color: isSecondary
+                    ? AppColors.white
+                    : const Color(0xFF06C270),
               ),
             ),
           ],
@@ -280,357 +523,346 @@ class _BillListScreenState extends State<BillListScreen> {
     );
   }
 
-  @override
-  Widget build(BuildContext context) {
-    final isAdmin = context.watch<AppProvider>().isAdmin;
+  Widget _buildBillItem(dynamic bill) {
+    final month = ((bill['month'] ?? 1) as num).toInt();
+    final year = ((bill['year'] ?? 2026) as num).toInt();
+    final price = ((bill['price'] ?? 0) as num).toInt();
+    final isPaid = bill['paid'] == true;
+    final measurement =
+        bill['measurement_number']?.toString() ?? '0000';
 
-    final filtered = filter == 'Semua'
-        ? bills
-        : bills.where((b) {
-            if (filter == 'Lunas') return b['paid'] == true;
-            if (filter == 'Belum') return b['paid'] == false;
-            return true;
-          }).toList();
+    final Color statusColor =
+        isPaid ? AppColors.success : AppColors.error;
+    final Color statusBg = isPaid
+        ? const Color(0xFFE8F5E9)
+        : const Color(0xFFFFEBEE);
+    final String statusText =
+        isPaid ? 'Lunas' : 'Belum Lunas';
+    final IconData statusIcon =
+        isPaid ? Icons.check : Icons.warning_amber;
 
-    final pendingPayments = payments.where((p) => p['verified'] == false).toList();
-
-    if (isAdmin) {
-      return DefaultTabController(
-        length: 2,
-        child: Scaffold(
-          backgroundColor: AppColors.bgLight,
-          appBar: AppBar(
-            title: const Text('Kelola Tagihan'),
-            backgroundColor: AppColors.mainColor,
-            bottom: const TabBar(
-              tabs: [
-                Tab(text: 'Tagihan'),
-                Tab(text: 'Verifikasi'),
-              ],
-              labelColor: AppColors.white,
-              unselectedLabelColor: Color(0xB3FFFFFF),
-              indicatorColor: AppColors.white,
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(20, 6, 20, 6),
+      child: Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: AppColors.white,
+          borderRadius: BorderRadius.circular(20),
+          boxShadow: const [
+            BoxShadow(
+              color: Color(0x0A000000),
+              blurRadius: 12,
+              offset: Offset(0, 4),
             ),
-          ),
-          body: TabBarView(
-            children: [
-              _buildBillTab(filtered, isAdmin),
-              _buildVerificationTab(pendingPayments),
-            ],
-          ),
+          ],
         ),
-      );
-    }
-
-    return Scaffold(
-      backgroundColor: AppColors.bgLight,
-      appBar: AppBar(
-        title: const Text('Tagihan Saya'),
-        backgroundColor: AppColors.mainColor,
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // --- ICON STATUS ---
+            Container(
+              width: 48,
+              height: 48,
+              decoration: BoxDecoration(
+                color: statusBg,
+                borderRadius: BorderRadius.circular(14),
+              ),
+              child: Icon(
+                statusIcon,
+                color: statusColor,
+                size: 24,
+              ),
+            ),
+            const SizedBox(width: 14),
+            // --- CONTENT ---
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Tagihan ${_monthName(month)} $year',
+                    style: const TextStyle(
+                      fontSize: 15,
+                      fontWeight: FontWeight.bold,
+                      color: AppColors.dark1,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    'BILL-$year-${month.toString().padLeft(2, '0')}-$measurement',
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: AppColors.mainColor,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                  Text(
+                    formatRupiah(price),
+                    style: TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                      color: isPaid
+                          ? AppColors.mainColor
+                          : AppColors.error,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    'Jatuh Tempo 30 ${_monthName(month)} $year',
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: AppColors.grey500,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(width: 10),
+            // --- STATUS + DETAIL BUTTON ---
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: 10, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: statusBg,
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  child: Text(
+                    statusText,
+                    style: TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w600,
+                      color: statusColor,
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                GestureDetector(
+                  onTap: () => _showBillDetail(bill),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 16, vertical: 8),
+                    decoration: BoxDecoration(
+                      color: AppColors.mainColor,
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: const Text(
+                      'Detail',
+                      style: TextStyle(
+                        color: AppColors.white,
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
       ),
-      body: _buildBillTab(filtered, isAdmin),
     );
   }
 
-  Widget _buildBillTab(List filtered, bool isAdmin) {
-    return Column(
-      children: [
-        if (isAdmin)
-          Container(
-            padding: const EdgeInsets.all(16),
-            color: AppColors.mainColor,
-            child: Column(
-              children: [
-                DropdownButtonFormField(
-                  value: selectedCustomerId,
-                  decoration: InputDecoration(
-                    filled: true,
-                    fillColor: AppColors.white,
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(12),
-                      borderSide: BorderSide.none,
-                    ),
-                  ),
-                  hint: const Text('Pilih Pelanggan'),
-                  items: customers.map<DropdownMenuItem<int>>((c) => DropdownMenuItem(
-                    value: (c['id'] as num).toInt(),
-                    child: Text(c['name']?.toString() ?? '-'),
-                  )).toList(),
-                  onChanged: (v) => setState(() => selectedCustomerId = v),
-                ),
-                const SizedBox(height: 8),
-                Row(
-                  children: [
-                    Expanded(
-                      child: TextFormField(
-                        controller: _meterCtrl,
-                        decoration: InputDecoration(
-                          hintText: 'No Meter',
-                          filled: true,
-                          fillColor: AppColors.white,
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(12),
-                            borderSide: BorderSide.none,
-                          ),
+  void _showBillDetail(dynamic bill) {
+    final month = ((bill['month'] ?? 1) as num).toInt();
+    final year = ((bill['year'] ?? 2026) as num).toInt();
+    final price = ((bill['price'] ?? 0) as num).toInt();
+    final usage = ((bill['usage_value'] ?? 0) as num).toInt();
+    final isPaid = bill['paid'] == true;
+    final measurement =
+        bill['measurement_number']?.toString() ?? '-';
+    final service =
+        bill['service'] as Map<String, dynamic>?;
+    final payment =
+        bill['payments'] as Map<String, dynamic>?;
+    final admin =
+        bill['admin'] as Map<String, dynamic>?;
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) => Container(
+        margin: const EdgeInsets.only(top: 60),
+        decoration: const BoxDecoration(
+          color: AppColors.white,
+          borderRadius: BorderRadius.only(
+            topLeft: Radius.circular(30),
+            topRight: Radius.circular(30),
+          ),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            // Drag handle
+            Container(
+              margin: const EdgeInsets.only(top: 12),
+              width: 40,
+              height: 4,
+              decoration: BoxDecoration(
+                color: AppColors.grey300,
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.all(24),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    mainAxisAlignment:
+                        MainAxisAlignment.spaceBetween,
+                    children: [
+                      const Text(
+                        'Detail Tagihan',
+                        style: TextStyle(
+                          fontSize: 20,
+                          fontWeight: FontWeight.bold,
+                          color: AppColors.dark1,
                         ),
                       ),
-                    ),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: TextFormField(
-                        controller: _usageCtrl,
-                        keyboardType: TextInputType.number,
-                        decoration: InputDecoration(
-                          hintText: 'Pemakaian (m³)',
-                          filled: true,
-                          fillColor: AppColors.white,
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(12),
-                            borderSide: BorderSide.none,
-                          ),
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 12, vertical: 6),
+                        decoration: BoxDecoration(
+                          color: isPaid
+                              ? const Color(0xFFE8F5E9)
+                              : const Color(0xFFFFEBEE),
+                          borderRadius:
+                              BorderRadius.circular(20),
                         ),
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 8),
-                Row(
-                  children: [
-                    Expanded(
-                      child: CustomButton(
-                        text: _editingBillId != null ? 'Update Tagihan' : 'Buat Tagihan',
-                        height: 44,
-                        onPressed: _createOrUpdateBill,
-                      ),
-                    ),
-                    if (_editingBillId != null) ...[
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: CustomButton(
-                          text: 'Batal',
-                          height: 44,
-                          color: AppColors.dark3,
-                          onPressed: _cancelEdit,
+                        child: Text(
+                          isPaid ? 'Lunas' : 'Belum Lunas',
+                          style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                            color: isPaid
+                                ? AppColors.success
+                                : AppColors.error,
+                          ),
                         ),
                       ),
                     ],
-                  ],
-                ),
-              ],
-            ),
-          ),
-        Padding(
-          padding: const EdgeInsets.all(12),
-          child: Row(
-            children: ['Semua', 'Lunas', 'Belum'].map((f) => Padding(
-              padding: const EdgeInsets.only(right: 8),
-              child: ChoiceChip(
-                label: Text(f),
-                selected: filter == f,
-                onSelected: (_) => setState(() => filter = f),
-                selectedColor: AppColors.mainColor,
-                labelStyle: TextStyle(
-                  color: filter == f ? AppColors.white : AppColors.dark1,
-                ),
-              ),
-            )).toList(),
-          ),
-        ),
-        Expanded(
-          child: isLoading
-              ? const Center(child: CircularProgressIndicator())
-              : filtered.isEmpty
-                  ? const Center(child: Text('Tidak ada tagihan'))
-                  : ListView.builder(
-                      padding: const EdgeInsets.all(16),
-                      itemCount: filtered.length,
-                      itemBuilder: (context, index) {
-                        final b = filtered[index];
-                        final customer = b['customer'] as Map?;
-                        return Padding(
-                          padding: const EdgeInsets.only(bottom: 12),
-                          child: CustomCard(
-                            padding: const EdgeInsets.all(16),
-                            child: Row(
-                              children: [
-                                Expanded(
-                                  child: Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
-                                    children: [
-                                      Text(
-                                        customer?['name']?.toString() ?? (isAdmin ? '-' : 'Tagihan'),
-                                        style: const TextStyle(fontWeight: FontWeight.bold),
-                                      ),
-                                      Text('Bulan: ${b['month']}/${b['year']}'),
-                                      Text('Pemakaian: ${b['usage_value']} m³'),
-                                      Text(
-                                        'Rp ${b['price']}',
-                                        style: const TextStyle(
-                                          color: AppColors.mainColor,
-                                          fontWeight: FontWeight.w600,
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                                StatusBadge(status: b['paid'] == true ? 'Lunas' : 'Belum Bayar'),
-                                if (isAdmin) ...[
-                                  IconButton(
-                                    icon: const Icon(Icons.edit, color: AppColors.mainColor),
-                                    onPressed: () => _startEditBill(b),
-                                  ),
-                                  IconButton(
-                                    icon: const Icon(Icons.delete, color: AppColors.error),
-                                    onPressed: () => _deleteBill((b['id'] as num).toInt()),
-                                  ),
-                                ],
-                              ],
-                            ),
-                          ),
-                        );
-                      },
+                  ),
+                  const SizedBox(height: 24),
+                  _detailRow(
+                      'Periode', '${_monthName(month)} $year'),
+                  _detailRow('No. Meter', measurement),
+                  _detailRow('Pemakaian', '$usage m³'),
+                  if (service != null)
+                    _detailRow('Golongan',
+                        service['name']?.toString() ?? '-'),
+                  if (admin != null)
+                    _detailRow('Petugas',
+                        admin['name']?.toString() ?? 'Admin'),
+                  const Divider(height: 24),
+                  Row(
+                    mainAxisAlignment:
+                        MainAxisAlignment.spaceBetween,
+                    children: [
+                      const Text(
+                        'Total Tagihan',
+                        style: TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w600,
+                          color: AppColors.dark1,
+                        ),
+                      ),
+                      Text(
+                        formatRupiah(price),
+                        style: const TextStyle(
+                          fontSize: 20,
+                          fontWeight: FontWeight.bold,
+                          color: AppColors.mainColor,
+                        ),
+                      ),
+                    ],
+                  ),
+                  if (payment != null && isPaid) ...[
+                    const SizedBox(height: 12),
+                    _detailRow(
+                      'Tanggal Bayar',
+                      payment['payment_date']
+                              ?.toString() ??
+                          '-',
                     ),
+                    _detailRow(
+                      'Status Verifikasi',
+                      (payment['verified'] == true)
+                          ? 'Terverifikasi'
+                          : 'Menunggu Verifikasi',
+                    ),
+                  ],
+                  const SizedBox(height: 24),
+                  if (!isPaid)
+                    SizedBox(
+                      width: double.infinity,
+                      child: ElevatedButton(
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: AppColors.mainColor,
+                          foregroundColor: AppColors.white,
+                          padding: const EdgeInsets.symmetric(
+                              vertical: 14),
+                          shape: RoundedRectangleBorder(
+                            borderRadius:
+                                BorderRadius.circular(14),
+                          ),
+                        ),
+                        onPressed: () {
+                          Navigator.pop(context);
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) =>
+                                  PaymentScreen(bill: bill),
+                            ),
+                          ).then((_) => _loadBills());
+                        },
+                        child: const Text(
+                          'Bayar Sekarang',
+                          style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+            ),
+          ],
         ),
-      ],
+      ),
     );
   }
 
-  Widget _buildVerificationTab(List pendingPayments) {
-    return isLoading
-        ? const Center(child: CircularProgressIndicator())
-        : pendingPayments.isEmpty
-            ? const Center(child: Text('Tidak ada pembayaran pending'))
-            : ListView.builder(
-                padding: const EdgeInsets.all(16),
-                itemCount: pendingPayments.length,
-                itemBuilder: (context, index) {
-                  final p = pendingPayments[index];
-                  final bill = p['bill'] as Map?;
-                  final customer = bill?['customer'] as Map?;
-                  final proofFile = p['payment_proof']?.toString();
-
-                  return Padding(
-                    padding: const EdgeInsets.only(bottom: 12),
-                    child: CustomCard(
-                      padding: const EdgeInsets.all(16),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Row(
-                            children: [
-                              Expanded(
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Text(
-                                      customer?['name']?.toString() ?? 'Customer',
-                                      style: const TextStyle(fontWeight: FontWeight.bold),
-                                    ),
-                                    Text(
-                                      'Bill ID: ${p['bill_id']}',
-                                      style: const TextStyle(fontSize: 12, color: AppColors.dark3),
-                                    ),
-                                    Text(
-                                      'Total: Rp ${p['total_amount'] ?? bill?['price'] ?? '-'}',
-                                      style: const TextStyle(
-                                        color: AppColors.mainColor,
-                                        fontWeight: FontWeight.w600,
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                              const StatusBadge(status: 'Menunggu Verifikasi'),
-                            ],
-                          ),
-                          if (proofFile != null && proofFile.isNotEmpty) ...[
-                            const SizedBox(height: 12),
-                            GestureDetector(
-                              onTap: () => _showPaymentProofImage(proofFile),
-                              child: Container(
-                                width: double.infinity,
-                                height: 140,
-                                decoration: BoxDecoration(
-                                  color: AppColors.grey100,
-                                  borderRadius: BorderRadius.circular(12),
-                                  border: Border.all(color: AppColors.light2),
-                                ),
-                                child: ClipRRect(
-                                  borderRadius: BorderRadius.circular(12),
-                                  child: Image.network(
-                                    '${ApiConfig.baseUrl}${ApiConfig.paymentProof}/$proofFile',
-                                    fit: BoxFit.cover,
-                                    loadingBuilder: (context, child, progress) {
-                                      if (progress == null) return child;
-                                      return Center(
-                                        child: CircularProgressIndicator(
-                                          value: progress.expectedTotalBytes != null
-                                              ? progress.cumulativeBytesLoaded / progress.expectedTotalBytes!
-                                              : null,
-                                          color: AppColors.mainColor,
-                                        ),
-                                      );
-                                    },
-                                    errorBuilder: (context, error, stackTrace) => Column(
-                                      mainAxisAlignment: MainAxisAlignment.center,
-                                      children: [
-                                        Icon(Icons.broken_image, size: 40, color: AppColors.grey400),
-                                        const SizedBox(height: 4),
-                                        Text(
-                                          'Gagal memuat gambar',
-                                          style: TextStyle(fontSize: 12, color: AppColors.grey500),
-                                        ),
-                                        Text(
-                                          'Tap untuk coba lagi',
-                                          style: TextStyle(fontSize: 11, color: AppColors.mainColor),
-                                        ),
-                                      ],
-                                    ),
-                                  ),
-                                ),
-                              ),
-                            ),
-                            const SizedBox(height: 4),
-                            Center(
-                              child: Text(
-                                'Tap gambar untuk memperbesar',
-                                style: TextStyle(fontSize: 11, color: AppColors.dark3),
-                              ),
-                            ),
-                          ],
-                          const SizedBox(height: 12),
-                          Row(
-                            children: [
-                              Expanded(
-                                child: ElevatedButton.icon(
-                                  onPressed: () => _verifyPayment((p['id'] as num).toInt()),
-                                  icon: const Icon(Icons.check, size: 18),
-                                  label: const Text('Verifikasi'),
-                                  style: ElevatedButton.styleFrom(
-                                    backgroundColor: AppColors.success,
-                                    foregroundColor: AppColors.white,
-                                  ),
-                                ),
-                              ),
-                              const SizedBox(width: 8),
-                              Expanded(
-                                child: ElevatedButton.icon(
-                                  onPressed: () => _rejectPayment((p['id'] as num).toInt()),
-                                  icon: const Icon(Icons.close, size: 18),
-                                  label: const Text('Tolak'),
-                                  style: ElevatedButton.styleFrom(
-                                    backgroundColor: AppColors.error,
-                                    foregroundColor: AppColors.white,
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ),
-                        ],
-                      ),
-                    ),
-                  );
-                },
-              );
+  Widget _detailRow(String label, String value) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Text(
+            label,
+            style: TextStyle(
+              fontSize: 14,
+              color: AppColors.grey600,
+            ),
+          ),
+          Text(
+            value,
+            style: const TextStyle(
+              fontSize: 14,
+              fontWeight: FontWeight.w600,
+              color: AppColors.dark1,
+            ),
+          ),
+        ],
+      ),
+    );
   }
 }
