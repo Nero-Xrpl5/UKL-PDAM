@@ -3,82 +3,49 @@ import '../constants/colors.dart';
 
 class StatusBadge extends StatelessWidget {
   final String status;
-  final double fontSize;
-  final EdgeInsets padding;
 
-  const StatusBadge({
-    Key? key,
-    required this.status,
-    this.fontSize = 12,
-    this.padding = const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-  }) : super(key: key);
-
-  Color get _backgroundColor {
-    switch (status.toLowerCase()) {
-      case 'aktif':
-      case 'lunas':
-      case 'paid':
-      case 'success':
-      case 'selesai':
-        return AppColors.success.withOpacity(0.15);
-      case 'non-aktif':
-      case 'nonaktif':
-      case 'belum bayar':
-      case 'unpaid':
-      case 'gagal':
-        return AppColors.error.withOpacity(0.15);
-      case 'menunggu verifikasi':
-      case 'pending':
-      case 'proses':
-      case 'menunggak':
-        return AppColors.warning.withOpacity(0.15);
-      case 'belum':
-        return AppColors.light2;
-      default:
-        return AppColors.subtle;
-    }
-  }
-
-  Color get _textColor {
-    switch (status.toLowerCase()) {
-      case 'aktif':
-      case 'lunas':
-      case 'paid':
-      case 'success':
-      case 'selesai':
-        return AppColors.success;
-      case 'non-aktif':
-      case 'nonaktif':
-      case 'belum bayar':
-      case 'unpaid':
-      case 'gagal':
-        return AppColors.error;
-      case 'menunggu verifikasi':
-      case 'pending':
-      case 'proses':
-      case 'menunggak':
-        return AppColors.warning;
-      case 'belum':
-        return AppColors.dark2;
-      default:
-        return AppColors.mainColor;
-    }
-  }
+  const StatusBadge({super.key, required this.status});
 
   @override
   Widget build(BuildContext context) {
+    Color bgColor;
+    Color textColor;
+
+    switch (status) {
+      case 'Lunas':
+        bgColor = const Color(0x2606C270);
+        textColor = AppColors.success;
+        break;
+      case 'Belum Bayar':
+      case 'Belum':
+        bgColor = const Color(0x26FF3B3B);
+        textColor = AppColors.error;
+        break;
+      case 'Menunggu Verifikasi':
+        bgColor = const Color(0x26FFCC00);
+        textColor = const Color(0xFFFF9800);
+        break;
+      case 'Diproses':
+        bgColor = const Color(0x263377FF);
+        textColor = AppColors.mainColor;
+        break;
+      default:
+        bgColor = AppColors.grey100;
+        textColor = AppColors.dark3;
+    }
+
     return Container(
-      padding: padding,
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
       decoration: BoxDecoration(
-        color: _backgroundColor,
+        color: bgColor,
         borderRadius: BorderRadius.circular(20),
       ),
       child: Text(
         status,
         style: TextStyle(
-          fontSize: fontSize,
+          fontSize: 11,
           fontWeight: FontWeight.w600,
-          color: _textColor,
+          color: textColor,
         ),
       ),
     );

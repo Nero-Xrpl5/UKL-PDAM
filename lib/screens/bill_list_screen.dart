@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../constants/colors.dart';
+import '../constants/api.dart';
 import '../providers/app_provider.dart';
 import '../services/bill_api.dart';
 import '../services/customer_api.dart';
@@ -21,9 +22,9 @@ class _BillListScreenState extends State<BillListScreen> {
   final CustomerApi _customerApi = CustomerApi();
   final PaymentApi _paymentApi = PaymentApi();
 
-  List<dynamic> bills = [];
-  List<dynamic> customers = [];
-  List<dynamic> payments = [];
+  List bills = [];
+  List customers = [];
+  List payments = [];
   bool isLoading = true;
   String filter = 'Semua';
 
@@ -40,12 +41,12 @@ class _BillListScreenState extends State<BillListScreen> {
     _loadData();
   }
 
-  Future<void> _loadData() async {
+  Future _loadData() async {
     setState(() => isLoading = true);
     try {
       final isAdmin = context.read<AppProvider>().isAdmin;
-      List<dynamic> b;
-      List<dynamic> p = [];
+      List b;
+      List p = [];
 
       if (isAdmin) {
         b = await _billApi.getBills();
@@ -67,13 +68,16 @@ class _BillListScreenState extends State<BillListScreen> {
       if (mounted) {
         setState(() => isLoading = false);
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Gagal memuat: $e'), backgroundColor: AppColors.error),
+          SnackBar(
+            content: Text('Gagal memuat: $e'),
+            backgroundColor: AppColors.error,
+          ),
         );
       }
     }
   }
 
-  Future<void> _createOrUpdateBill() async {
+  Future _createOrUpdateBill() async {
     if (selectedCustomerId == null || _usageCtrl.text.isEmpty) return;
     final data = {
       'customer_id': selectedCustomerId,
@@ -87,18 +91,25 @@ class _BillListScreenState extends State<BillListScreen> {
         await _billApi.updateBill(_editingBillId!, data);
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Tagihan berhasil diupdate!'), backgroundColor: AppColors.success),
+            const SnackBar(
+              content: Text('Tagihan berhasil diupdate!'),
+              backgroundColor: AppColors.success,
+            ),
           );
         }
       } else {
         await _billApi.createBill(data);
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Tagihan berhasil dibuat!'), backgroundColor: AppColors.success),
+            const SnackBar(
+              content: Text('Tagihan berhasil dibuat!'),
+              backgroundColor: AppColors.success,
+            ),
           );
         }
       }
-      _usageCtrl.clear(); _meterCtrl.clear();
+      _usageCtrl.clear();
+      _meterCtrl.clear();
       setState(() {
         _editingBillId = null;
         selectedCustomerId = null;
@@ -107,7 +118,10 @@ class _BillListScreenState extends State<BillListScreen> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error: $e'), backgroundColor: AppColors.error),
+          SnackBar(
+            content: Text('Error: $e'),
+            backgroundColor: AppColors.error,
+          ),
         );
       }
     }
@@ -117,11 +131,11 @@ class _BillListScreenState extends State<BillListScreen> {
     setState(() {
       _editingBillId = (bill['id'] as num).toInt();
       selectedCustomerId = (bill['customer_id'] as num).toInt();
-      selectedMonth = (bill['month'] ?? DateTime.now().month) is int 
-          ? bill['month'] 
+      selectedMonth = (bill['month'] ?? DateTime.now().month) is int
+          ? bill['month']
           : int.tryParse(bill['month'].toString()) ?? DateTime.now().month;
-      selectedYear = (bill['year'] ?? DateTime.now().year) is int 
-          ? bill['year'] 
+      selectedYear = (bill['year'] ?? DateTime.now().year) is int
+          ? bill['year']
           : int.tryParse(bill['year'].toString()) ?? DateTime.now().year;
       _meterCtrl.text = bill['measurement_number']?.toString() ?? '';
       _usageCtrl.text = bill['usage_value']?.toString() ?? '';
@@ -135,67 +149,148 @@ class _BillListScreenState extends State<BillListScreen> {
       selectedMonth = DateTime.now().month;
       selectedYear = DateTime.now().year;
     });
-    _usageCtrl.clear(); _meterCtrl.clear();
+    _usageCtrl.clear();
+    _meterCtrl.clear();
   }
 
-  Future<void> _deleteBill(int id) async {
+  Future _deleteBill(int id) async {
     try {
       await _billApi.deleteBill(id);
       _loadData();
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error: $e'), backgroundColor: AppColors.error),
+          SnackBar(
+            content: Text('Error: $e'),
+            backgroundColor: AppColors.error,
+          ),
         );
       }
     }
   }
 
-  Future<void> _verifyPayment(int paymentId) async {
+  Future _verifyPayment(int paymentId) async {
     try {
       await _paymentApi.verifyPayment(paymentId);
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Pembayaran diverifikasi!'), backgroundColor: AppColors.success),
+          const SnackBar(
+            content: Text('Pembayaran diverifikasi!'),
+            backgroundColor: AppColors.success,
+          ),
         );
       }
       _loadData();
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error: $e'), backgroundColor: AppColors.error),
+          SnackBar(
+            content: Text('Error: $e'),
+            backgroundColor: AppColors.error,
+          ),
         );
       }
     }
   }
 
-  Future<void> _rejectPayment(int paymentId) async {
+  Future _rejectPayment(int paymentId) async {
     try {
       await _paymentApi.rejectPayment(paymentId);
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Pembayaran ditolak!'), backgroundColor: AppColors.warning),
+          const SnackBar(
+            content: Text('Pembayaran ditolak!'),
+            backgroundColor: AppColors.warning,
+          ),
         );
       }
       _loadData();
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error: $e'), backgroundColor: AppColors.error),
+          SnackBar(
+            content: Text('Error: $e'),
+            backgroundColor: AppColors.error,
+          ),
         );
       }
     }
+  }
+
+  void _showPaymentProofImage(String filename) {
+    final url = '${ApiConfig.baseUrl}${ApiConfig.paymentProof}/$filename';
+    showDialog(
+      context: context,
+      builder: (context) => Dialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ClipRRect(
+              borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+              child: Image.network(
+                url,
+                fit: BoxFit.cover,
+                loadingBuilder: (context, child, progress) {
+                  if (progress == null) return child;
+                  return Container(
+                    height: 250,
+                    alignment: Alignment.center,
+                    child: const CircularProgressIndicator(),
+                  );
+                },
+                errorBuilder: (context, error, stackTrace) => Container(
+                  height: 200,
+                  color: AppColors.grey100,
+                  alignment: Alignment.center,
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(Icons.broken_image, size: 48, color: AppColors.grey400),
+                      const SizedBox(height: 8),
+                      Text(
+                        'Gagal memuat gambar',
+                        style: TextStyle(color: AppColors.grey500),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.all(16),
+              child: SizedBox(
+                width: double.infinity,
+                child: ElevatedButton(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppColors.mainColor,
+                    foregroundColor: AppColors.white,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                  ),
+                  onPressed: () => Navigator.pop(context),
+                  child: const Text('Tutup'),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 
   @override
   Widget build(BuildContext context) {
     final isAdmin = context.watch<AppProvider>().isAdmin;
 
-    final filtered = filter == 'Semua' ? bills : bills.where((b) {
-      if (filter == 'Lunas') return b['paid'] == true;
-      if (filter == 'Belum') return b['paid'] == false;
-      return true;
-    }).toList();
+    final filtered = filter == 'Semua'
+        ? bills
+        : bills.where((b) {
+            if (filter == 'Lunas') return b['paid'] == true;
+            if (filter == 'Belum') return b['paid'] == false;
+            return true;
+          }).toList();
 
     final pendingPayments = payments.where((p) => p['verified'] == false).toList();
 
@@ -213,7 +308,7 @@ class _BillListScreenState extends State<BillListScreen> {
                 Tab(text: 'Verifikasi'),
               ],
               labelColor: AppColors.white,
-              unselectedLabelColor: Colors.white70,
+              unselectedLabelColor: Color(0xB3FFFFFF),
               indicatorColor: AppColors.white,
             ),
           ),
@@ -237,7 +332,7 @@ class _BillListScreenState extends State<BillListScreen> {
     );
   }
 
-  Widget _buildBillTab(List<dynamic> filtered, bool isAdmin) {
+  Widget _buildBillTab(List filtered, bool isAdmin) {
     return Column(
       children: [
         if (isAdmin)
@@ -246,12 +341,15 @@ class _BillListScreenState extends State<BillListScreen> {
             color: AppColors.mainColor,
             child: Column(
               children: [
-                DropdownButtonFormField<int>(
+                DropdownButtonFormField(
                   value: selectedCustomerId,
                   decoration: InputDecoration(
                     filled: true,
                     fillColor: AppColors.white,
-                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide: BorderSide.none,
+                    ),
                   ),
                   hint: const Text('Pilih Pelanggan'),
                   items: customers.map<DropdownMenuItem<int>>((c) => DropdownMenuItem(
@@ -270,7 +368,10 @@ class _BillListScreenState extends State<BillListScreen> {
                           hintText: 'No Meter',
                           filled: true,
                           fillColor: AppColors.white,
-                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(12),
+                            borderSide: BorderSide.none,
+                          ),
                         ),
                       ),
                     ),
@@ -283,7 +384,10 @@ class _BillListScreenState extends State<BillListScreen> {
                           hintText: 'Pemakaian (m³)',
                           filled: true,
                           fillColor: AppColors.white,
-                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(12),
+                            borderSide: BorderSide.none,
+                          ),
                         ),
                       ),
                     ),
@@ -325,7 +429,9 @@ class _BillListScreenState extends State<BillListScreen> {
                 selected: filter == f,
                 onSelected: (_) => setState(() => filter = f),
                 selectedColor: AppColors.mainColor,
-                labelStyle: TextStyle(color: filter == f ? AppColors.white : AppColors.dark1),
+                labelStyle: TextStyle(
+                  color: filter == f ? AppColors.white : AppColors.dark1,
+                ),
               ),
             )).toList(),
           ),
@@ -340,7 +446,7 @@ class _BillListScreenState extends State<BillListScreen> {
                       itemCount: filtered.length,
                       itemBuilder: (context, index) {
                         final b = filtered[index];
-                        final customer = b['customer'] as Map<String, dynamic>?;
+                        final customer = b['customer'] as Map?;
                         return Padding(
                           padding: const EdgeInsets.only(bottom: 12),
                           child: CustomCard(
@@ -351,10 +457,19 @@ class _BillListScreenState extends State<BillListScreen> {
                                   child: Column(
                                     crossAxisAlignment: CrossAxisAlignment.start,
                                     children: [
-                                      Text(customer?['name']?.toString() ?? (isAdmin ? '-' : 'Tagihan'), style: const TextStyle(fontWeight: FontWeight.bold)),
+                                      Text(
+                                        customer?['name']?.toString() ?? (isAdmin ? '-' : 'Tagihan'),
+                                        style: const TextStyle(fontWeight: FontWeight.bold),
+                                      ),
                                       Text('Bulan: ${b['month']}/${b['year']}'),
                                       Text('Pemakaian: ${b['usage_value']} m³'),
-                                      Text('Rp ${b['price']}', style: const TextStyle(color: AppColors.mainColor, fontWeight: FontWeight.w600)),
+                                      Text(
+                                        'Rp ${b['price']}',
+                                        style: const TextStyle(
+                                          color: AppColors.mainColor,
+                                          fontWeight: FontWeight.w600,
+                                        ),
+                                      ),
                                     ],
                                   ),
                                 ),
@@ -380,7 +495,7 @@ class _BillListScreenState extends State<BillListScreen> {
     );
   }
 
-  Widget _buildVerificationTab(List<dynamic> pendingPayments) {
+  Widget _buildVerificationTab(List pendingPayments) {
     return isLoading
         ? const Center(child: CircularProgressIndicator())
         : pendingPayments.isEmpty
@@ -390,8 +505,9 @@ class _BillListScreenState extends State<BillListScreen> {
                 itemCount: pendingPayments.length,
                 itemBuilder: (context, index) {
                   final p = pendingPayments[index];
-                  final bill = p['bill'] as Map<String, dynamic>?;
-                  final customer = bill?['customer'] as Map<String, dynamic>?;
+                  final bill = p['bill'] as Map?;
+                  final customer = bill?['customer'] as Map?;
+                  final proofFile = p['payment_proof']?.toString();
 
                   return Padding(
                     padding: const EdgeInsets.only(bottom: 12),
@@ -406,15 +522,82 @@ class _BillListScreenState extends State<BillListScreen> {
                                 child: Column(
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
-                                    Text(customer?['name']?.toString() ?? 'Customer', style: const TextStyle(fontWeight: FontWeight.bold)),
-                                    Text('Bill ID: ${p['bill_id']}', style: TextStyle(fontSize: 12, color: AppColors.dark3)),
-                                    Text('Total: Rp ${p['total_amount'] ?? bill?['price'] ?? '-'}', style: const TextStyle(color: AppColors.mainColor, fontWeight: FontWeight.w600)),
+                                    Text(
+                                      customer?['name']?.toString() ?? 'Customer',
+                                      style: const TextStyle(fontWeight: FontWeight.bold),
+                                    ),
+                                    Text(
+                                      'Bill ID: ${p['bill_id']}',
+                                      style: const TextStyle(fontSize: 12, color: AppColors.dark3),
+                                    ),
+                                    Text(
+                                      'Total: Rp ${p['total_amount'] ?? bill?['price'] ?? '-'}',
+                                      style: const TextStyle(
+                                        color: AppColors.mainColor,
+                                        fontWeight: FontWeight.w600,
+                                      ),
+                                    ),
                                   ],
                                 ),
                               ),
                               const StatusBadge(status: 'Menunggu Verifikasi'),
                             ],
                           ),
+                          if (proofFile != null && proofFile.isNotEmpty) ...[
+                            const SizedBox(height: 12),
+                            GestureDetector(
+                              onTap: () => _showPaymentProofImage(proofFile),
+                              child: Container(
+                                width: double.infinity,
+                                height: 140,
+                                decoration: BoxDecoration(
+                                  color: AppColors.grey100,
+                                  borderRadius: BorderRadius.circular(12),
+                                  border: Border.all(color: AppColors.light2),
+                                ),
+                                child: ClipRRect(
+                                  borderRadius: BorderRadius.circular(12),
+                                  child: Image.network(
+                                    '${ApiConfig.baseUrl}${ApiConfig.paymentProof}/$proofFile',
+                                    fit: BoxFit.cover,
+                                    loadingBuilder: (context, child, progress) {
+                                      if (progress == null) return child;
+                                      return Center(
+                                        child: CircularProgressIndicator(
+                                          value: progress.expectedTotalBytes != null
+                                              ? progress.cumulativeBytesLoaded / progress.expectedTotalBytes!
+                                              : null,
+                                          color: AppColors.mainColor,
+                                        ),
+                                      );
+                                    },
+                                    errorBuilder: (context, error, stackTrace) => Column(
+                                      mainAxisAlignment: MainAxisAlignment.center,
+                                      children: [
+                                        Icon(Icons.broken_image, size: 40, color: AppColors.grey400),
+                                        const SizedBox(height: 4),
+                                        Text(
+                                          'Gagal memuat gambar',
+                                          style: TextStyle(fontSize: 12, color: AppColors.grey500),
+                                        ),
+                                        Text(
+                                          'Tap untuk coba lagi',
+                                          style: TextStyle(fontSize: 11, color: AppColors.mainColor),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ),
+                            const SizedBox(height: 4),
+                            Center(
+                              child: Text(
+                                'Tap gambar untuk memperbesar',
+                                style: TextStyle(fontSize: 11, color: AppColors.dark3),
+                              ),
+                            ),
+                          ],
                           const SizedBox(height: 12),
                           Row(
                             children: [

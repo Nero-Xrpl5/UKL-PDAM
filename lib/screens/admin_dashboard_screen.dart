@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
 import '../constants/colors.dart';
+import '../utils/helpers.dart';
 import '../services/customer_api.dart';
 import '../services/service_api.dart';
 import '../services/payment_api.dart';
 import '../services/api_service.dart';
 import '../constants/api.dart';
+import '../widgets/shimmer_card.dart';
 import 'customer_list_screen.dart';
 import 'service_list_screen.dart';
 import 'bill_list_screen.dart';
@@ -28,8 +30,9 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
   int totalServices = 0;
   int pendingPayments = 0;
   int totalBillsAmount = 0;
-  List<dynamic> recentServices = [];
+  List recentServices = [];
   bool isLoading = true;
+  String? errorMessage;
   String adminName = 'Admin';
 
   @override
@@ -39,6 +42,10 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
   }
 
   Future<void> _loadDashboardData() async {
+    setState(() {
+      isLoading = true;
+      errorMessage = null;
+    });
     try {
       final customerResponse = await _api.get('${ApiConfig.customers}?page=1&quantity=1');
       final serviceResponse = await _api.get('${ApiConfig.services}?page=1&quantity=1');
@@ -48,29 +55,30 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
 
       int billsTotal = 0;
       if (bills != null && bills['data'] != null) {
-        final List<dynamic> billsData = bills['data'];
+        final List billsData = bills['data'];
         for (final b in billsData) {
           billsTotal += ((b['price'] ?? 0) as num).toInt();
         }
       }
 
-      setState(() {
-        totalCustomers = (customerResponse?['count'] as num?)?.toInt() ?? 0;
-        totalServices = (serviceResponse?['count'] as num?)?.toInt() ?? 0;
-        pendingPayments = payments.where((p) => p['verified'] == false).length;
-        totalBillsAmount = billsTotal;
-        recentServices = servicesList;
-        isLoading = false;
-      });
+      if (mounted) {
+        setState(() {
+          totalCustomers = (customerResponse?['count'] as num?)?.toInt() ?? 0;
+          totalServices = (serviceResponse?['count'] as num?)?.toInt() ?? 0;
+          pendingPayments = payments.where((p) => p['verified'] == false).length;
+          totalBillsAmount = billsTotal;
+          recentServices = servicesList;
+          isLoading = false;
+        });
+      }
     } catch (e) {
-      setState(() => isLoading = false);
+      if (mounted) {
+        setState(() {
+          errorMessage = e.toString();
+          isLoading = false;
+        });
+      }
     }
-  }
-
-  String _formatCompactNumber(int num) {
-    if (num >= 1000000) return '${(num / 1000000).toStringAsFixed(1)}Jt';
-    if (num >= 1000) return '${(num / 1000).toStringAsFixed(1)}K';
-    return num.toString();
   }
 
   @override
@@ -82,7 +90,6 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
         child: CustomScrollView(
           physics: const AlwaysScrollableScrollPhysics(),
           slivers: [
-            // Header Section
             SliverToBoxAdapter(
               child: Container(
                 decoration: const BoxDecoration(
@@ -107,7 +114,6 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        // Top bar: profile + notification
                         Row(
                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
@@ -117,16 +123,16 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                                   width: 48,
                                   height: 48,
                                   decoration: BoxDecoration(
-                                    color: Colors.white.withOpacity(0.25),
+                                    color: const Color(0x33FFFFFF),
                                     shape: BoxShape.circle,
                                     border: Border.all(
-                                      color: Colors.white.withOpacity(0.4),
+                                      color: const Color(0x66FFFFFF),
                                       width: 2,
                                     ),
                                   ),
                                   child: const Icon(
                                     Icons.person,
-                                    color: Colors.white,
+                                    color: AppColors.white,
                                     size: 26,
                                   ),
                                 ),
@@ -135,10 +141,10 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
                                     const Text(
-                                      'Selamat Pagi, Admin',
+                                      'Selamat Datang, Admin',
                                       style: TextStyle(
                                         fontSize: 13,
-                                        color: Colors.white70,
+                                        color: Color(0xB3FFFFFF),
                                         fontWeight: FontWeight.w500,
                                       ),
                                     ),
@@ -148,7 +154,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                                       style: const TextStyle(
                                         fontSize: 18,
                                         fontWeight: FontWeight.bold,
-                                        color: Colors.white,
+                                        color: AppColors.white,
                                       ),
                                     ),
                                   ],
@@ -156,23 +162,21 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                               ],
                             ),
                             GestureDetector(
-                              onTap: () {
-                                Navigator.push(
-                                  context,
-                                  MaterialPageRoute(
-                                    builder: (_) => const NotificationScreen(),
-                                  ),
-                                );
-                              },
+                              onTap: () => Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (_) => const NotificationScreen(),
+                                ),
+                              ),
                               child: Container(
                                 padding: const EdgeInsets.all(10),
-                                decoration: BoxDecoration(
-                                  color: Colors.white.withOpacity(0.15),
+                                decoration: const BoxDecoration(
+                                  color: Color(0x26FFFFFF),
                                   shape: BoxShape.circle,
                                 ),
                                 child: const Icon(
                                   Icons.notifications_outlined,
-                                  color: Colors.white,
+                                  color: AppColors.white,
                                   size: 22,
                                 ),
                               ),
@@ -180,71 +184,86 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                           ],
                         ),
                         const SizedBox(height: 24),
-                        // Stats Row 1
-                        Row(
-                          children: [
-                            Expanded(
-                              child: _statCard(
-                                icon: Icons.people_outline,
-                                value: _formatCompactNumber(totalCustomers),
-                                label: 'Total Pelanggan',
-                                subLabel: '12% Bulan Ini',
-                                iconBg: const Color(0xFFE3F2FD),
-                                iconColor: const Color(0xFF2196F3),
-                                trendUp: true,
+                        if (isLoading)
+                          const Row(
+                            children: [
+                              Expanded(
+                                child: ShimmerCard(
+                                  height: 110,
+                                  margin: EdgeInsets.only(right: 6),
+                                ),
                               ),
-                            ),
-                            const SizedBox(width: 12),
-                            Expanded(
-                              child: _statCard(
-                                icon: Icons.receipt_long,
-                                value: 'Rp ${_formatCompactNumber(totalBillsAmount)}',
-                                label: 'Tagihan Bulan Ini',
-                                subLabel: '5.2% Bulan lalu',
-                                iconBg: const Color(0xFFF3E5F5),
-                                iconColor: const Color(0xFF9C27B0),
-                                trendUp: false,
+                              Expanded(
+                                child: ShimmerCard(
+                                  height: 110,
+                                  margin: EdgeInsets.only(left: 6),
+                                ),
                               ),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 12),
-                        // Stats Row 2
-                        Row(
-                          children: [
-                            Expanded(
-                              child: _statCard(
-                                icon: Icons.build,
-                                value: '$totalServices',
-                                label: 'Total Layanan',
-                                subLabel: 'Tersedia',
-                                iconBg: const Color(0xFFE8F5E9),
-                                iconColor: const Color(0xFF4CAF50),
-                                trendUp: true,
+                            ],
+                          )
+                        else ...[
+                          Row(
+                            children: [
+                              Expanded(
+                                child: _statCard(
+                                  icon: Icons.people_outline,
+                                  value: formatCompactNumber(totalCustomers),
+                                  label: 'Total Pelanggan',
+                                  subLabel: 'Aktif',
+                                  iconBg: const Color(0xFFE3F2FD),
+                                  iconColor: const Color(0xFF2196F3),
+                                  trendUp: true,
+                                ),
                               ),
-                            ),
-                            const SizedBox(width: 12),
-                            Expanded(
-                              child: _statCard(
-                                icon: Icons.water_drop,
-                                value: '94%',
-                                label: 'Kualitas Air',
-                                subLabel: 'Standar SNI',
-                                iconBg: const Color(0xFFE0F7FA),
-                                iconColor: const Color(0xFF00ACC1),
-                                trendUp: true,
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: _statCard(
+                                  icon: Icons.receipt_long,
+                                  value: formatRupiah(totalBillsAmount),
+                                  label: 'Total Tagihan',
+                                  subLabel: 'Kumulatif',
+                                  iconBg: const Color(0xFFF3E5F5),
+                                  iconColor: const Color(0xFF9C27B0),
+                                  trendUp: false,
+                                ),
                               ),
-                            ),
-                          ],
-                        ),
+                            ],
+                          ),
+                          const SizedBox(height: 12),
+                          Row(
+                            children: [
+                              Expanded(
+                                child: _statCard(
+                                  icon: Icons.build,
+                                  value: '$totalServices',
+                                  label: 'Total Layanan',
+                                  subLabel: 'Tersedia',
+                                  iconBg: const Color(0xFFE8F5E9),
+                                  iconColor: const Color(0xFF4CAF50),
+                                  trendUp: true,
+                                ),
+                              ),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: _statCard(
+                                  icon: Icons.pending_actions,
+                                  value: '$pendingPayments',
+                                  label: 'Pending Verifikasi',
+                                  subLabel: 'Pembayaran',
+                                  iconBg: const Color(0xFFFFF3E0),
+                                  iconColor: const Color(0xFFFF9800),
+                                  trendUp: pendingPayments > 0,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
                       ],
                     ),
                   ),
                 ),
               ),
             ),
-
-            // Menu Grid
             SliverToBoxAdapter(
               child: Padding(
                 padding: const EdgeInsets.fromLTRB(20, 24, 20, 8),
@@ -309,70 +328,40 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                           label: 'Laporan',
                           color: const Color(0xFF9C27B0),
                           bgColor: const Color(0xFFF3E5F5),
-                          onTap: () {
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(
-                                content: Text('Fitur laporan belum tersedia'),
-                                backgroundColor: Color(0xFF757575),
-                              ),
-                            );
-                          },
+                          onTap: () => _showSnack('Fitur laporan belum tersedia'),
                         ),
                         _menuItem(
                           icon: Icons.handyman_outlined,
                           label: 'Pemeliharaan',
                           color: const Color(0xFFF44336),
                           bgColor: const Color(0xFFFFEBEE),
-                          onTap: () {
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(
-                                content: Text('Fitur pemeliharaan belum tersedia'),
-                                backgroundColor: Color(0xFF757575),
-                              ),
-                            );
-                          },
+                          onTap: () => _showSnack('Fitur pemeliharaan belum tersedia'),
                         ),
                         _menuItem(
                           icon: Icons.location_on_outlined,
                           label: 'Zona\nWilayah',
                           color: const Color(0xFF00BCD4),
                           bgColor: const Color(0xFFE0F7FA),
-                          onTap: () {
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(
-                                content: Text('Fitur zona wilayah belum tersedia'),
-                                backgroundColor: Color(0xFF757575),
-                              ),
-                            );
-                          },
+                          onTap: () => _showSnack('Fitur zona wilayah belum tersedia'),
                         ),
                         _menuItem(
                           icon: Icons.settings_outlined,
                           label: 'Pengaturan',
                           color: const Color(0xFF607D8B),
                           bgColor: const Color(0xFFECEFF1),
-                          onTap: () {
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(
-                                content: Text('Fitur pengaturan belum tersedia'),
-                                backgroundColor: Color(0xFF757575),
-                              ),
-                            );
-                          },
+                          onTap: () => _showSnack('Fitur pengaturan belum tersedia'),
                         ),
                         _menuItem(
                           icon: Icons.logout_outlined,
                           label: 'Keluar',
                           color: const Color(0xFFE53935),
                           bgColor: const Color(0xFFFFEBEE),
-                          onTap: () async {
-                            await Navigator.push(
-                              context,
-                              MaterialPageRoute(
-                                builder: (_) => const ProfileScreen(),
-                              ),
-                            );
-                          },
+                          onTap: () => Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => const ProfileScreen(),
+                            ),
+                          ),
                         ),
                       ],
                     ),
@@ -380,8 +369,6 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                 ),
               ),
             ),
-
-            // Aktivitas Layanan (Services) - from backend /services
             SliverToBoxAdapter(
               child: Padding(
                 padding: const EdgeInsets.fromLTRB(20, 16, 20, 24),
@@ -416,6 +403,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                                   fontWeight: FontWeight.w600,
                                 ),
                               ),
+                              const SizedBox(width: 2),
                               const Icon(
                                 Icons.chevron_right,
                                 size: 16,
@@ -428,25 +416,44 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                     ),
                     const SizedBox(height: 12),
                     if (isLoading)
-                      const Center(
-                        child: Padding(
-                          padding: EdgeInsets.all(32),
-                          child: CircularProgressIndicator(
-                            color: Color(0xFF48A7FF),
-                          ),
+                      const ShimmerCard(height: 80)
+                    else if (errorMessage != null)
+                      Container(
+                        padding: const EdgeInsets.all(20),
+                        decoration: BoxDecoration(
+                          color: AppColors.white,
+                          borderRadius: BorderRadius.circular(16),
+                        ),
+                        child: Column(
+                          children: [
+                            const Icon(
+                              Icons.error_outline,
+                              color: AppColors.error,
+                              size: 40,
+                            ),
+                            const SizedBox(height: 8),
+                            Text(
+                              'Gagal memuat data',
+                              style: TextStyle(color: AppColors.grey600),
+                            ),
+                            TextButton(
+                              onPressed: _loadDashboardData,
+                              child: const Text('Coba Lagi'),
+                            ),
+                          ],
                         ),
                       )
                     else if (recentServices.isEmpty)
                       Container(
                         padding: const EdgeInsets.all(24),
                         decoration: BoxDecoration(
-                          color: Colors.white,
+                          color: AppColors.white,
                           borderRadius: BorderRadius.circular(16),
-                          boxShadow: [
+                          boxShadow: const [
                             BoxShadow(
-                              color: Colors.black.withOpacity(0.04),
+                              color: Color(0x0A000000),
                               blurRadius: 12,
-                              offset: const Offset(0, 4),
+                              offset: Offset(0, 4),
                             ),
                           ],
                         ),
@@ -456,13 +463,13 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                               Icon(
                                 Icons.build_circle_outlined,
                                 size: 48,
-                                color: Colors.grey.shade300,
+                                color: AppColors.grey300,
                               ),
                               const SizedBox(height: 8),
                               Text(
                                 'Belum ada layanan tersedia',
                                 style: TextStyle(
-                                  color: Colors.grey.shade500,
+                                  color: AppColors.grey500,
                                   fontSize: 14,
                                 ),
                               ),
@@ -470,7 +477,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                               Text(
                                 'Tambah layanan di menu Layanan',
                                 style: TextStyle(
-                                  color: Colors.grey.shade400,
+                                  color: AppColors.grey400,
                                   fontSize: 12,
                                 ),
                               ),
@@ -489,13 +496,13 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                           child: Container(
                             padding: const EdgeInsets.all(16),
                             decoration: BoxDecoration(
-                              color: Colors.white,
+                              color: AppColors.white,
                               borderRadius: BorderRadius.circular(16),
-                              boxShadow: [
+                              boxShadow: const [
                                 BoxShadow(
-                                  color: Colors.black.withOpacity(0.04),
+                                  color: Color(0x0A000000),
                                   blurRadius: 12,
-                                  offset: const Offset(0, 4),
+                                  offset: Offset(0, 4),
                                 ),
                               ],
                             ),
@@ -504,9 +511,9 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                                 Container(
                                   width: 44,
                                   height: 44,
-                                  decoration: BoxDecoration(
-                                    color: const Color(0xFFFFF3E0),
-                                    borderRadius: BorderRadius.circular(12),
+                                  decoration: const BoxDecoration(
+                                    color: Color(0xFFFFF3E0),
+                                    borderRadius: BorderRadius.all(Radius.circular(12)),
                                   ),
                                   child: const Icon(
                                     Icons.build,
@@ -531,7 +538,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                                         'Pemakaian: $minUsage - $maxUsage m³',
                                         style: TextStyle(
                                           fontSize: 12,
-                                          color: Colors.grey.shade500,
+                                          color: AppColors.grey500,
                                         ),
                                       ),
                                     ],
@@ -542,12 +549,12 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                                     horizontal: 10,
                                     vertical: 4,
                                   ),
-                                  decoration: BoxDecoration(
-                                    color: const Color(0xFFE8F5E9),
-                                    borderRadius: BorderRadius.circular(20),
+                                  decoration: const BoxDecoration(
+                                    color: Color(0xFFE8F5E9),
+                                    borderRadius: BorderRadius.all(Radius.circular(20)),
                                   ),
                                   child: Text(
-                                    'Rp ${price.toString()}',
+                                    formatRupiah(price),
                                     style: const TextStyle(
                                       fontSize: 11,
                                       fontWeight: FontWeight.w600,
@@ -564,12 +571,18 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                 ),
               ),
             ),
-
-            const SliverToBoxAdapter(
-              child: SizedBox(height: 24),
-            ),
+            const SliverToBoxAdapter(child: SizedBox(height: 24)),
           ],
         ),
+      ),
+    );
+  }
+
+  void _showSnack(String msg) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(msg),
+        backgroundColor: const Color(0xFF757575),
       ),
     );
   }
@@ -586,13 +599,13 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
     return Container(
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.95),
+        color: const Color(0xF2FFFFFF),
         borderRadius: BorderRadius.circular(16),
-        boxShadow: [
+        boxShadow: const [
           BoxShadow(
-            color: Colors.black.withOpacity(0.06),
+            color: Color(0x0F000000),
             blurRadius: 10,
-            offset: const Offset(0, 4),
+            offset: Offset(0, 4),
           ),
         ],
       ),
@@ -610,23 +623,12 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                 ),
                 child: Icon(icon, color: iconColor, size: 20),
               ),
-              Row(
-                children: [
-                  Icon(
-                    trendUp ? Icons.trending_up : Icons.trending_down,
-                    size: 14,
-                    color: trendUp ? const Color(0xFF4CAF50) : const Color(0xFFE53935),
-                  ),
-                  const SizedBox(width: 2),
-                  Text(
-                    subLabel.split(' ').first,
-                    style: TextStyle(
-                      fontSize: 11,
-                      fontWeight: FontWeight.w600,
-                      color: trendUp ? const Color(0xFF4CAF50) : const Color(0xFFE53935),
-                    ),
-                  ),
-                ],
+              Icon(
+                trendUp ? Icons.trending_up : Icons.trending_down,
+                size: 14,
+                color: trendUp
+                    ? const Color(0xFF4CAF50)
+                    : const Color(0xFFE53935),
               ),
             ],
           ),
@@ -634,7 +636,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
           Text(
             value,
             style: const TextStyle(
-              fontSize: 22,
+              fontSize: 20,
               fontWeight: FontWeight.bold,
               color: Color(0xFF1A237E),
             ),
@@ -644,7 +646,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
             label,
             style: TextStyle(
               fontSize: 11,
-              color: Colors.grey.shade600,
+              color: AppColors.grey600,
               fontWeight: FontWeight.w500,
             ),
           ),
@@ -653,7 +655,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
             subLabel,
             style: TextStyle(
               fontSize: 10,
-              color: Colors.grey.shade400,
+              color: AppColors.grey400,
             ),
           ),
         ],
@@ -681,7 +683,12 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
               borderRadius: BorderRadius.circular(16),
               boxShadow: [
                 BoxShadow(
-                  color: color.withOpacity(0.15),
+                  color: Color.fromRGBO(
+                    color.red,
+                    color.green,
+                    color.blue,
+                    0.15,
+                  ),
                   blurRadius: 8,
                   offset: const Offset(0, 4),
                 ),

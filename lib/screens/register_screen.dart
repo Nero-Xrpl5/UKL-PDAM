@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../constants/colors.dart';
 import '../providers/app_provider.dart';
+import '../services/service_api.dart';
 import '../widgets/custom_button.dart';
 import '../widgets/custom_textfield.dart';
 import 'login_screen.dart';
@@ -28,13 +29,38 @@ class _RegisterScreenState extends State<RegisterScreen> {
   final _customerNumberCtrl = TextEditingController();
   final _addressCtrl = TextEditingController();
 
+  final ServiceApi _serviceApi = ServiceApi();
+  List services = [];
+  int? selectedServiceId;
+  bool loadingServices = false;
+
   @override
   void initState() {
     super.initState();
     isAdmin = widget.isAdmin;
+    if (!isAdmin) {
+      _loadServices();
+    }
   }
 
-  Future<void> _register() async {
+  Future _loadServices() async {
+    setState(() => loadingServices = true);
+    try {
+      final data = await _serviceApi.getServices();
+      setState(() {
+        services = data;
+        loadingServices = false;
+        if (services.isNotEmpty) {
+          final firstId = services.first['id'];
+          selectedServiceId = firstId is int ? firstId : (firstId as num).toInt();
+        }
+      });
+    } catch (e) {
+      setState(() => loadingServices = false);
+    }
+  }
+
+  Future _register() async {
     if (!_formKey.currentState!.validate()) return;
     if (_passwordCtrl.text != _confirmCtrl.text) {
       context.read<AppProvider>().setError('Password tidak cocok');
@@ -71,7 +97,16 @@ class _RegisterScreenState extends State<RegisterScreen> {
         provider.setError('Registrasi gagal: ${e.toString()}');
       }
     } else {
-      // CUSTOMER: username = customer_number (sama seperti admin tambah customer)
+      if (selectedServiceId == null) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Silakan pilih layanan terlebih dahulu.'),
+            backgroundColor: AppColors.warning,
+          ),
+        );
+        return;
+      }
+
       final String username = _customerNumberCtrl.text.isNotEmpty
           ? _customerNumberCtrl.text
           : _phoneCtrl.text;
@@ -84,10 +119,8 @@ class _RegisterScreenState extends State<RegisterScreen> {
         'customer_number': _customerNumberCtrl.text.isNotEmpty
             ? _customerNumberCtrl.text
             : _phoneCtrl.text,
-        'address': _addressCtrl.text.isNotEmpty
-            ? _addressCtrl.text
-            : 'Malang',
-        'service_id': 1,
+        'address': _addressCtrl.text.isNotEmpty ? _addressCtrl.text : 'Malang',
+        'service_id': selectedServiceId,
       };
 
       provider.setLoading(true);
@@ -128,11 +161,15 @@ class _RegisterScreenState extends State<RegisterScreen> {
                       onTap: () => Navigator.pop(context),
                       child: Container(
                         padding: const EdgeInsets.all(8),
-                        decoration: BoxDecoration(
-                          color: AppColors.white.withOpacity(0.2),
+                        decoration: const BoxDecoration(
+                          color: Color(0x33FFFFFF),
                           shape: BoxShape.circle,
                         ),
-                        child: const Icon(Icons.arrow_back_ios, color: AppColors.white, size: 18),
+                        child: const Icon(
+                          Icons.arrow_back_ios,
+                          color: AppColors.white,
+                          size: 18,
+                        ),
                       ),
                     ),
                     const Spacer(),
@@ -140,20 +177,32 @@ class _RegisterScreenState extends State<RegisterScreen> {
                       'assets/images/logo.png',
                       width: 50,
                       height: 50,
-                      errorBuilder: (c, e, s) => const Icon(Icons.water_drop, color: AppColors.white, size: 40),
+                      errorBuilder: (c, e, s) => const Icon(
+                        Icons.water_drop,
+                        color: AppColors.white,
+                        size: 40,
+                      ),
                     ),
                     const Spacer(),
                     const SizedBox(width: 40),
                   ],
                 ),
                 const SizedBox(height: 12),
-                Text(
+                const Text(
                   'TirtaApp',
-                  style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: AppColors.white),
+                  style: TextStyle(
+                    fontSize: 20,
+                    fontWeight: FontWeight.bold,
+                    color: AppColors.white,
+                  ),
                 ),
                 Text(
                   'Registrasi Akun ${isAdmin ? 'Admin' : 'User'}',
-                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: AppColors.white.withOpacity(0.9)),
+                  style: const TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w600,
+                    color: Color(0xE6FFFFFF),
+                  ),
                 ),
               ],
             ),
@@ -182,7 +231,6 @@ class _RegisterScreenState extends State<RegisterScreen> {
                         validator: (v) => v == null || v.isEmpty ? 'Wajib diisi' : null,
                       ),
                       const SizedBox(height: 16),
-                      // Admin: input username terpisah. Customer: username = customer_number (auto)
                       if (isAdmin) ...[
                         CustomTextField(
                           label: 'Username',
@@ -220,11 +268,15 @@ class _RegisterScreenState extends State<RegisterScreen> {
                           validator: (v) => v == null || v.isEmpty ? 'Wajib diisi' : null,
                         ),
                         const SizedBox(height: 4),
-                        Padding(
-                          padding: const EdgeInsets.only(left: 8),
+                        const Padding(
+                          padding: EdgeInsets.only(left: 8),
                           child: Text(
                             'No Pelanggan akan digunakan sebagai Username untuk login',
-                            style: TextStyle(fontSize: 11, color: AppColors.dark3, fontStyle: FontStyle.italic),
+                            style: TextStyle(
+                              fontSize: 11,
+                              color: AppColors.dark3,
+                              fontStyle: FontStyle.italic,
+                            ),
                           ),
                         ),
                         const SizedBox(height: 16),
@@ -235,6 +287,87 @@ class _RegisterScreenState extends State<RegisterScreen> {
                           controller: _addressCtrl,
                           validator: (v) => v == null || v.isEmpty ? 'Wajib diisi' : null,
                         ),
+                        const SizedBox(height: 16),
+                        if (loadingServices)
+                          const Center(
+                            child: Padding(
+                              padding: EdgeInsets.all(16),
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                                color: AppColors.mainColor,
+                              ),
+                            ),
+                          )
+                        else if (services.isEmpty)
+                          Container(
+                            padding: const EdgeInsets.all(12),
+                            decoration: BoxDecoration(
+                              color: AppColors.error10,
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: const Row(
+                              children: [
+                                Icon(Icons.error, color: AppColors.error),
+                                SizedBox(width: 8),
+                                Expanded(
+                                  child: Text(
+                                    'Tidak ada layanan tersedia. Hubungi admin.',
+                                    style: TextStyle(fontSize: 13, color: AppColors.error),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          )
+                        else
+                          Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const Text(
+                                'Pilih Layanan *',
+                                style: TextStyle(
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w600,
+                                  color: AppColors.dark1,
+                                ),
+                              ),
+                              const SizedBox(height: 8),
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 16),
+                                decoration: BoxDecoration(
+                                  color: AppColors.grey100,
+                                  borderRadius: BorderRadius.circular(16),
+                                  border: Border.all(color: AppColors.subtle),
+                                ),
+                                child: DropdownButtonHideUnderline(
+                                  child: DropdownButton<int>(
+                                    isExpanded: true,
+                                    value: selectedServiceId,
+                                    hint: const Text('Pilih Layanan'),
+                                    icon: const Icon(
+                                      Icons.keyboard_arrow_down,
+                                      color: AppColors.mainColor,
+                                    ),
+                                    items: services.map<DropdownMenuItem<int>>((s) {
+                                      final dynamic rawId = s['id'];
+                                      final int id = rawId is int ? rawId : (rawId as num).toInt();
+                                      final String name = s['name']?.toString() ?? 'Layanan $id';
+                                      final String range =
+                                          '${s['min_usage'] ?? 0} - ${s['max_usage'] ?? 0} m³';
+                                      final String price = 'Rp ${s['price'] ?? 0}';
+                                      return DropdownMenuItem(
+                                        value: id,
+                                        child: Text(
+                                          '$name ($range) - $price',
+                                          style: const TextStyle(fontSize: 14),
+                                        ),
+                                      );
+                                    }).toList(),
+                                    onChanged: (v) => setState(() => selectedServiceId = v),
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
                       ],
                       const SizedBox(height: 16),
                       CustomTextField(
@@ -285,7 +418,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                         Container(
                           padding: const EdgeInsets.all(12),
                           decoration: BoxDecoration(
-                            color: AppColors.error.withOpacity(0.1),
+                            color: AppColors.error10,
                             borderRadius: BorderRadius.circular(12),
                           ),
                           child: Row(
@@ -305,17 +438,26 @@ class _RegisterScreenState extends State<RegisterScreen> {
                       Row(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
-                          Text('Sudah punya akun? ', style: TextStyle(color: AppColors.dark2, fontSize: 13)),
+                          Text(
+                            'Sudah punya akun? ',
+                            style: TextStyle(color: AppColors.dark2, fontSize: 13),
+                          ),
                           GestureDetector(
                             onTap: () {
                               Navigator.pushReplacement(
                                 context,
-                                MaterialPageRoute(builder: (_) => LoginScreen(isAdmin: isAdmin)),
+                                MaterialPageRoute(
+                                  builder: (_) => LoginScreen(isAdmin: isAdmin),
+                                ),
                               );
                             },
                             child: const Text(
                               'Login',
-                              style: TextStyle(color: AppColors.mainColor, fontWeight: FontWeight.w700, fontSize: 13),
+                              style: TextStyle(
+                                color: AppColors.mainColor,
+                                fontWeight: FontWeight.w700,
+                                fontSize: 13,
+                              ),
                             ),
                           ),
                         ],
