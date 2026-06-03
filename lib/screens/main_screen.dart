@@ -1,14 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import '../constants/colors.dart';
+import 'package:tirta_app/widgets/bottom_nav.dart';
 import '../providers/app_provider.dart';
 import 'admin_dashboard_screen.dart';
 import 'customer_home_screen.dart';
 import 'bill_list_screen.dart';
 import 'profile_screen.dart';
+import 'service_list_screen.dart';
 import 'service_list_customer_screen.dart';
-import 'notification_screen.dart';
-import '../widgets/bottom_nav.dart';
+import 'welcome_screen.dart';
 
 class MainScreen extends StatefulWidget {
   const MainScreen({super.key});
@@ -25,17 +25,17 @@ class _MainScreenState extends State<MainScreen> {
     final isAdmin = context.watch<AppProvider>().isAdmin;
 
     final adminScreens = const [
-      AdminDashboardScreen(),
-      BillListScreen(),
-      NotificationScreen(), // Admin: Notifikasi (sync dengan pembayaran)
-      ProfileScreen(),
+      AdminDashboardScreen(),      // Home
+      BillListScreen(),            // Tagihan
+      ServiceListScreen(),         // Layanan (backend: /services)
+      ProfileScreen(),             // Profil
     ];
 
     final customerScreens = const [
-      CustomerHomeScreen(),
-      BillListScreen(),
-      ServiceListCustomerScreen(), // Customer: Layanan (read-only)
-      ProfileScreen(),
+      CustomerHomeScreen(),        // Home
+      BillListScreen(),            // Tagihan
+      ServiceListCustomerScreen(), // Layanan (backend: /services)
+      ProfileScreen(),             // Profil
     ];
 
     final screens = isAdmin ? adminScreens : customerScreens;

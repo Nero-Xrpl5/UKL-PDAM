@@ -4,7 +4,7 @@ import 'login_screen.dart';
 import 'register_screen.dart';
 
 class WelcomeScreen extends StatefulWidget {
-  const WelcomeScreen({Key? key}) : super(key: key);
+  const WelcomeScreen({super.key});
 
   @override
   State<WelcomeScreen> createState() => _WelcomeScreenState();
@@ -16,239 +16,260 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppColors.white,
       body: Stack(
+        fit: StackFit.expand,
         children: [
-          Stack(
-            children: [
-              Container(color: AppColors.white),
-              Positioned(
-                left: -80,
-                top: -50,
-                bottom: -50,
-                child: Container(
-                  width: 280,
-                  decoration: const BoxDecoration(
-                    color: AppColors.mainColor,
-                    borderRadius: BorderRadius.only(
-                      topRight: Radius.circular(200),
-                      bottomRight: Radius.circular(200),
-                    ),
-                  ),
-                ),
+          // Blue gradient background
+          Container(
+            decoration: const BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
+                colors: [
+                  Color(0xFF4DA6FF),
+                  Color(0xFF0077E6),
+                ],
               ),
-              Positioned(
-                right: -20,
-                bottom: 120,
-                child: Image.asset(
-                  'assets/images/welcome_person.png',
-                  width: 320,
-                  height: 450,
-                  fit: BoxFit.cover,
-                  errorBuilder: (c, e, s) => Container(
-                    width: 320,
-                    height: 450,
-                    color: Colors.transparent,
-                  ),
-                ),
-              ),
-            ],
+            ),
           ),
-          SafeArea(
+
+          // Person image (centered, takes upper portion)
+          Positioned(
+            top: 100,
+            left: 0,
+            right: 0,
+            child: Image.asset(
+              'assets/images/welcome_person.png',
+              height: 420,
+              fit: BoxFit.contain,
+              errorBuilder: (c, e, s) => const SizedBox.shrink(),
+            ),
+          ),
+
+          // Logo at top center
+          Positioned(
+            top: 60,
+            left: 0,
+            right: 0,
             child: Column(
               children: [
-                Align(
-                  alignment: Alignment.topRight,
-                  child: Padding(
-                    padding: const EdgeInsets.only(top: 16, right: 24),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Image.asset(
-                          'assets/images/logo.png',
-                          width: 36,
-                          height: 36,
-                          errorBuilder: (c, e, s) => const Icon(
-                            Icons.water_drop,
-                            color: AppColors.mainColor,
-                            size: 36,
-                          ),
-                        ),
-                        const SizedBox(width: 8),
-                        const Text(
-                          'TirtaApp',
-                          style: TextStyle(
-                            fontSize: 18,
-                            fontWeight: FontWeight.bold,
-                            color: AppColors.mainColor,
-                          ),
-                        ),
-                      ],
-                    ),
+                Image.asset(
+                  'assets/images/logo.png',
+                  width: 60,
+                  height: 60,
+                  errorBuilder: (c, e, s) => const Icon(
+                    Icons.water_drop,
+                    size: 50,
+                    color: Colors.white,
                   ),
                 ),
-                const Spacer(),
-                Container(
-                  margin: const EdgeInsets.symmetric(horizontal: 20, vertical: 20),
-                  padding: const EdgeInsets.all(24),
-                  decoration: BoxDecoration(
-                    color: AppColors.white.withOpacity(0.85),
-                    borderRadius: BorderRadius.circular(24),
-                    boxShadow: [
-                      BoxShadow(
-                        color: AppColors.dark4.withOpacity(0.1),
-                        blurRadius: 20,
-                        offset: const Offset(0, 4),
-                      ),
-                    ],
+                const SizedBox(height: 4),
+                const Text(
+                  'TirtaApp',
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.white,
                   ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.center,
-                    children: [
-                      Text(
-                        'Belum Punya Akun?',
-                        style: TextStyle(
-                          fontSize: 20,
-                          fontWeight: FontWeight.bold,
-                          color: AppColors.dark1,
-                        ),
+                ),
+              ],
+            ),
+          ),
+
+          // Bottom white card
+          Positioned(
+            bottom: 0,
+            left: 0,
+            right: 0,
+            child: Container(
+              padding: const EdgeInsets.fromLTRB(24, 28, 24, 32),
+              decoration: const BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.only(
+                  topLeft: Radius.circular(30),
+                  topRight: Radius.circular(30),
+                ),
+              ),
+              child: SafeArea(
+                top: false,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.center,
+                  children: [
+                    // Title
+                    const Text(
+                      'Belum Punya Akun?',
+                      style: TextStyle(
+                        fontSize: 24,
+                        fontWeight: FontWeight.w600,
+                        color: Colors.black,
                       ),
-                      const SizedBox(height: 4),
-                      Text(
-                        isAdmin ? 'Admin' : 'User',
-                        style: TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.w600,
-                          color: AppColors.mainColor,
-                        ),
+                    ),
+                    const SizedBox(height: 12),
+
+                    // User / Admin Toggle
+                    Container(
+                      width: 220,
+                      padding: const EdgeInsets.all(4),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFE8F4FF),
+                        borderRadius: BorderRadius.circular(25),
                       ),
-                      const SizedBox(height: 12),
-                      Text(
-                        isAdmin
-                            ? 'Belum memiliki akun admin? Lakukan registrasi untuk mulai mengelola layanan, pelanggan, dan informasi PDAM dengan lebih mudah.'
-                            : 'Belum memiliki akun? Daftar sekarang untuk menikmati layanan PDAM secara online dengan lebih mudah, cepat, dan praktis.',
-                        textAlign: TextAlign.center,
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: AppColors.dark2,
-                          height: 1.5,
-                        ),
-                      ),
-                      const SizedBox(height: 20),
-                      SizedBox(
-                        width: double.infinity,
-                        height: 50,
-                        child: ElevatedButton(
-                          onPressed: () {
-                            Navigator.push(
-                              context,
-                              MaterialPageRoute(
-                                builder: (_) => RegisterScreen(isAdmin: isAdmin),
-                              ),
-                            );
-                          },
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: AppColors.white,
-                            foregroundColor: AppColors.mainColor,
-                            elevation: 2,
-                            shadowColor: AppColors.dark4.withOpacity(0.2),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(14),
-                              side: const BorderSide(color: AppColors.light2, width: 1),
-                            ),
-                          ),
-                          child: const Text(
-                            'Registrasi',
-                            style: TextStyle(
-                              fontSize: 15,
-                              fontWeight: FontWeight.w700,
-                            ),
-                          ),
-                        ),
-                      ),
-                      const SizedBox(height: 12),
-                      SizedBox(
-                        width: double.infinity,
-                        height: 50,
-                        child: ElevatedButton(
-                          onPressed: () {
-                            Navigator.push(
-                              context,
-                              MaterialPageRoute(
-                                builder: (_) => LoginScreen(isAdmin: isAdmin),
-                              ),
-                            );
-                          },
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: AppColors.white,
-                            foregroundColor: AppColors.mainColor,
-                            elevation: 2,
-                            shadowColor: AppColors.dark4.withOpacity(0.2),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(14),
-                              side: const BorderSide(color: AppColors.light2, width: 1),
-                            ),
-                          ),
-                          child: const Text(
-                            'Login',
-                            style: TextStyle(
-                              fontSize: 15,
-                              fontWeight: FontWeight.w700,
-                            ),
-                          ),
-                        ),
-                      ),
-                      const SizedBox(height: 16),
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
+                      child: Row(
                         children: [
-                          GestureDetector(
-                            onTap: () => setState(() => isAdmin = false),
-                            child: Container(
-                              width: 40,
-                              height: 40,
-                              decoration: BoxDecoration(
-                                color: !isAdmin ? AppColors.mainColor : AppColors.light3,
-                                shape: BoxShape.circle,
-                                border: Border.all(
-                                  color: !isAdmin ? AppColors.mainColor : AppColors.light2,
-                                  width: 2,
+                          Expanded(
+                            child: GestureDetector(
+                              onTap: () => setState(() => isAdmin = false),
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(vertical: 8),
+                                decoration: BoxDecoration(
+                                  color: !isAdmin ? Colors.white : Colors.transparent,
+                                  borderRadius: BorderRadius.circular(20),
+                                  boxShadow: !isAdmin
+                                      ? [
+                                          BoxShadow(
+                                            color: Colors.black.withOpacity(0.05),
+                                            blurRadius: 4,
+                                            offset: const Offset(0, 2),
+                                          )
+                                        ]
+                                      : null,
                                 ),
-                              ),
-                              child: Icon(
-                                Icons.person,
-                                color: !isAdmin ? AppColors.white : AppColors.dark3,
-                                size: 20,
+                                child: Text(
+                                  'User',
+                                  textAlign: TextAlign.center,
+                                  style: TextStyle(
+                                    fontSize: 14,
+                                    fontWeight: FontWeight.w600,
+                                    color: !isAdmin
+                                        ? const Color(0xFF48A7FF)
+                                        : Colors.grey,
+                                  ),
+                                ),
                               ),
                             ),
                           ),
-                          const SizedBox(width: 16),
-                          GestureDetector(
-                            onTap: () => setState(() => isAdmin = true),
-                            child: Container(
-                              width: 40,
-                              height: 40,
-                              decoration: BoxDecoration(
-                                color: isAdmin ? AppColors.mainColor : AppColors.light3,
-                                shape: BoxShape.circle,
-                                border: Border.all(
-                                  color: isAdmin ? AppColors.mainColor : AppColors.light2,
-                                  width: 2,
+                          Expanded(
+                            child: GestureDetector(
+                              onTap: () => setState(() => isAdmin = true),
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(vertical: 8),
+                                decoration: BoxDecoration(
+                                  color: isAdmin ? Colors.white : Colors.transparent,
+                                  borderRadius: BorderRadius.circular(20),
+                                  boxShadow: isAdmin
+                                      ? [
+                                          BoxShadow(
+                                            color: Colors.black.withOpacity(0.05),
+                                            blurRadius: 4,
+                                            offset: const Offset(0, 2),
+                                          )
+                                        ]
+                                      : null,
                                 ),
-                              ),
-                              child: Icon(
-                                Icons.admin_panel_settings,
-                                color: isAdmin ? AppColors.white : AppColors.dark3,
-                                size: 20,
+                                child: Text(
+                                  'Admin',
+                                  textAlign: TextAlign.center,
+                                  style: TextStyle(
+                                    fontSize: 14,
+                                    fontWeight: FontWeight.w600,
+                                    color: isAdmin
+                                        ? const Color(0xFF48A7FF)
+                                        : Colors.grey,
+                                  ),
+                                ),
                               ),
                             ),
                           ),
                         ],
                       ),
-                    ],
-                  ),
+                    ),
+
+                    const SizedBox(height: 16),
+
+                    // Description
+                    Text(
+                      isAdmin
+                          ? 'Belum memiliki akun admin? Daftar sekarang untuk mengelola layanan PDAM dengan lebih mudah, cepat, dan praktis.'
+                          : 'Belum memiliki akun? Daftar sekarang untuk menikmati layanan PDAM secara online dengan lebih mudah, cepat, dan praktis.',
+                      textAlign: TextAlign.center,
+                      style: const TextStyle(
+                        fontSize: 12,
+                        color: Colors.black54,
+                        height: 1.5,
+                      ),
+                    ),
+
+                    const SizedBox(height: 24),
+
+                    // Registrasi Button
+                    SizedBox(
+                      width: double.infinity,
+                      height: 48,
+                      child: OutlinedButton(
+                        onPressed: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => RegisterScreen(isAdmin: isAdmin),
+                            ),
+                          );
+                        },
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: Colors.black,
+                          side: const BorderSide(
+                            color: Color(0xFF48A7FF),
+                            width: 1.5,
+                          ),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(15),
+                          ),
+                          backgroundColor: Colors.white,
+                          textStyle: const TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                        child: const Text('Registrasi'),
+                      ),
+                    ),
+
+                    const SizedBox(height: 12),
+
+                    // Login Button
+                    SizedBox(
+                      width: double.infinity,
+                      height: 48,
+                      child: OutlinedButton(
+                        onPressed: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => LoginScreen(isAdmin: isAdmin),
+                            ),
+                          );
+                        },
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: Colors.black,
+                          side: const BorderSide(
+                            color: Color(0xFF48A7FF),
+                            width: 1.5,
+                          ),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(15),
+                          ),
+                          backgroundColor: Colors.white,
+                          textStyle: const TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                        child: const Text('Login'),
+                      ),
+                    ),
+                  ],
                 ),
-              ],
+              ),
             ),
           ),
         ],

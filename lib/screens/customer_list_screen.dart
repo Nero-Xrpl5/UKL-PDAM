@@ -94,6 +94,8 @@ class _CustomerListScreenState extends State<CustomerListScreen> {
     final TextEditingController phoneCtrl = TextEditingController(text: customer?['phone']?.toString() ?? '');
     final TextEditingController addressCtrl = TextEditingController(text: customer?['address']?.toString() ?? '');
     final TextEditingController numberCtrl = TextEditingController(text: customer?['customer_number']?.toString() ?? '');
+    final TextEditingController passwordCtrl = TextEditingController(); // NEW: password field
+    bool obscurePassword = true;
 
     int? selectedServiceId;
     if (isEdit) {
@@ -122,6 +124,7 @@ class _CustomerListScreenState extends State<CustomerListScreen> {
           content: SingleChildScrollView(
             child: Column(
               mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 CustomTextField(label: 'Nama', hint: 'Nama lengkap', controller: nameCtrl),
                 const SizedBox(height: 12),
@@ -139,6 +142,39 @@ class _CustomerListScreenState extends State<CustomerListScreen> {
                   'No Pelanggan akan digunakan sebagai Username untuk login',
                   style: TextStyle(fontSize: 11, color: AppColors.dark3, fontStyle: FontStyle.italic),
                 ),
+                if (!isEdit) ...[
+                  const SizedBox(height: 12),
+                  // Password field for new customer
+                  TextFormField(
+                    controller: passwordCtrl,
+                    obscureText: obscurePassword,
+                    decoration: InputDecoration(
+                      labelText: 'Password',
+                      hintText: 'Minimal 6 karakter',
+                      prefixIcon: const Icon(Icons.lock_outline, color: AppColors.dark3),
+                      suffixIcon: IconButton(
+                        icon: Icon(
+                          obscurePassword ? Icons.visibility_off : Icons.visibility,
+                          color: AppColors.dark3,
+                          size: 20,
+                        ),
+                        onPressed: () => setDialogState(() => obscurePassword = !obscurePassword),
+                      ),
+                      filled: true,
+                      fillColor: Colors.grey.shade50,
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: BorderSide.none,
+                      ),
+                      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  const Text(
+                    'Password ini akan digunakan customer untuk login',
+                    style: TextStyle(fontSize: 11, color: AppColors.dark3, fontStyle: FontStyle.italic),
+                  ),
+                ],
                 if (!isEdit) ...[
                   const SizedBox(height: 12),
                   if (loadingServices)
@@ -175,7 +211,7 @@ class _CustomerListScreenState extends State<CustomerListScreen> {
                     Container(
                       padding: const EdgeInsets.symmetric(horizontal: 16),
                       decoration: BoxDecoration(
-                        color: AppColors.white,
+                        color: Colors.white,
                         borderRadius: BorderRadius.circular(16),
                         border: Border.all(color: AppColors.subtle),
                       ),
@@ -207,14 +243,25 @@ class _CustomerListScreenState extends State<CustomerListScreen> {
             TextButton(onPressed: () => Navigator.pop(context), child: const Text('Batal')),
             ElevatedButton(
               onPressed: () async {
-                if (!isEdit && selectedServiceId == null) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
-                      content: Text('Pilih layanan terlebih dahulu!'),
-                      backgroundColor: AppColors.warning,
-                    ),
-                  );
-                  return;
+                if (!isEdit) {
+                  if (selectedServiceId == null) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text('Pilih layanan terlebih dahulu!'),
+                        backgroundColor: AppColors.warning,
+                      ),
+                    );
+                    return;
+                  }
+                  if (passwordCtrl.text.isEmpty || passwordCtrl.text.length < 6) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text('Password minimal 6 karakter!'),
+                        backgroundColor: AppColors.warning,
+                      ),
+                    );
+                    return;
+                  }
                 }
 
                 Navigator.pop(context);
@@ -228,9 +275,8 @@ class _CustomerListScreenState extends State<CustomerListScreen> {
                   if (isEdit) {
                     await _api.updateCustomer(customer['id'], data);
                   } else {
-                    // SAMAKAN: username = customer_number (sama seperti register)
                     data['username'] = numberCtrl.text;
-                    data['password'] = '12345678';
+                    data['password'] = passwordCtrl.text; // Use admin-set password
                     data['service_id'] = selectedServiceId;
                     await _api.createCustomer(data);
                   }
