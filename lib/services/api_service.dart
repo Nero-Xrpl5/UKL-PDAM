@@ -40,6 +40,8 @@ class ApiService {
     return headers;
   }
 
+  get token => null;
+
   Future<dynamic> _safeRequest(Future<http.Response> Function() request) async {
     try {
       final response = await request().timeout(const Duration(seconds: 15));
