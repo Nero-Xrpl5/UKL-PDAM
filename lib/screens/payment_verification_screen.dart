@@ -19,6 +19,7 @@ class _PaymentVerificationScreenState extends State<PaymentVerificationScreen> {
   final ApiService _api = ApiService();
   bool _isProcessing = false;
 
+  // --- Data Helpers ---
   String get _billNumber {
     final y = ((widget.bill['year'] ?? 2026) as num).toInt();
     final m = (widget.bill['measurement_number'] ?? '0000')
@@ -39,19 +40,8 @@ class _PaymentVerificationScreenState extends State<PaymentVerificationScreen> {
 
   String get _monthName {
     const names = [
-      '',
-      'Januari',
-      'Februari',
-      'Maret',
-      'April',
-      'Mei',
-      'Juni',
-      'Juli',
-      'Agustus',
-      'September',
-      'Oktober',
-      'November',
-      'Desember'
+      '', 'Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni',
+      'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'
     ];
     return names[_month];
   }
@@ -60,6 +50,14 @@ class _PaymentVerificationScreenState extends State<PaymentVerificationScreen> {
     final p = widget.bill['payments'];
     if (p != null && p is Map) return p;
     return null;
+  }
+
+  int? get _paymentId {
+    final p = _payment;
+    if (p == null) return null;
+    final id = p['id'];
+    if (id == null) return null;
+    return (id as num).toInt();
   }
 
   String? get _proofFilename {
@@ -83,19 +81,8 @@ class _PaymentVerificationScreenState extends State<PaymentVerificationScreen> {
 
   String _monthShort(int m) {
     const n = [
-      '',
-      'Jan',
-      'Feb',
-      'Mar',
-      'Apr',
-      'Mei',
-      'Jun',
-      'Jul',
-      'Agu',
-      'Sep',
-      'Okt',
-      'Nov',
-      'Des'
+      '', 'Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun',
+      'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des'
     ];
     return n[m];
   }
@@ -106,21 +93,25 @@ class _PaymentVerificationScreenState extends State<PaymentVerificationScreen> {
     return '$h:$min';
   }
 
+  // --- Verifikasi / Tolak ---
   Future<void> _verify(bool approve) async {
-    final pid = _payment?['id'];
+    final pid = _paymentId;
     if (pid == null) {
       _showSnack('Data pembayaran tidak valid', isError: true);
       return;
     }
+
     setState(() => _isProcessing = true);
+
     try {
       if (approve) {
-        await _paymentApi.verifyPayment((pid as num).toInt());
+        await _paymentApi.verifyPayment(pid);
         _showSnack('Pembayaran berhasil diverifikasi!');
       } else {
-        await _paymentApi.rejectPayment((pid as num).toInt());
+        await _paymentApi.rejectPayment(pid);
         _showSnack('Pembayaran ditolak.');
       }
+
       Future.delayed(const Duration(seconds: 1), () {
         if (mounted) Navigator.pop(context, true);
       });
@@ -232,7 +223,7 @@ class _PaymentVerificationScreenState extends State<PaymentVerificationScreen> {
                     decoration: BoxDecoration(
                       color: AppColors.white,
                       borderRadius: BorderRadius.circular(20),
-                      border: Border.all(color: AppColors.subtle),
+                      border: Border.all(color: AppColors.grey200),
                       boxShadow: const [
                         BoxShadow(
                           color: Color(0x0A000000),
@@ -276,43 +267,7 @@ class _PaymentVerificationScreenState extends State<PaymentVerificationScreen> {
                         if (proofUrl != null) ...[
                           const SizedBox(height: 16),
                           GestureDetector(
-                            onTap: () {
-                              showDialog(
-                                context: context,
-                                builder: (_) => Dialog(
-                                  backgroundColor: Colors.transparent,
-                                  child: InteractiveViewer(
-                                    child: Image.network(
-                                      proofUrl,
-                                      headers: {
-                                        'app-key': ApiConfig.appKey,
-                                        if (_api.token != null)
-                                          'Authorization':
-                                              'Bearer ${_api.token}',
-                                      },
-                                      loadingBuilder:
-                                          (c, child, progress) {
-                                        if (progress == null) {
-                                          return child;
-                                        }
-                                        return const Center(
-                                          child:
-                                              CircularProgressIndicator(),
-                                        );
-                                      },
-                                      errorBuilder: (c, e, s) =>
-                                          const Center(
-                                        child: Text(
-                                          'Gagal memuat gambar',
-                                          style: TextStyle(
-                                              color: Colors.white),
-                                        ),
-                                      ),
-                                    ),
-                                  ),
-                                ),
-                              );
-                            },
+                            onTap: () => _showImageDialog(proofUrl),
                             child: Container(
                               padding: const EdgeInsets.symmetric(
                                   horizontal: 16, vertical: 8),
@@ -355,7 +310,7 @@ class _PaymentVerificationScreenState extends State<PaymentVerificationScreen> {
                     decoration: BoxDecoration(
                       color: AppColors.white,
                       borderRadius: BorderRadius.circular(20),
-                      border: Border.all(color: AppColors.subtle),
+                      border: Border.all(color: AppColors.grey200),
                       boxShadow: const [
                         BoxShadow(
                           color: Color(0x0A000000),
@@ -413,8 +368,7 @@ class _PaymentVerificationScreenState extends State<PaymentVerificationScreen> {
                         _detailRow('Metode Bayar', 'Transfer Bank BCA'),
                         const SizedBox(height: 12),
                         Row(
-                          mainAxisAlignment:
-                              MainAxisAlignment.spaceBetween,
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
                             const Text(
                               'Status',
@@ -526,6 +480,72 @@ class _PaymentVerificationScreenState extends State<PaymentVerificationScreen> {
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  void _showImageDialog(String url) {
+    showDialog(
+      context: context,
+      builder: (_) => Dialog(
+        backgroundColor: Colors.transparent,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ClipRRect(
+              borderRadius: BorderRadius.circular(16),
+              child: Image.network(
+                url,
+                headers: {
+                  'app-key': ApiConfig.appKey,
+                  if (_api.token != null)
+                    'Authorization': 'Bearer ${_api.token}',
+                },
+                loadingBuilder: (c, child, progress) {
+                  if (progress == null) return child;
+                  return Container(
+                    width: 300,
+                    height: 300,
+                    color: AppColors.white,
+                    child: const Center(
+                      child: CircularProgressIndicator(),
+                    ),
+                  );
+                },
+                errorBuilder: (c, e, s) => Container(
+                  width: 300,
+                  height: 200,
+                  color: AppColors.white,
+                  child: const Center(
+                    child: Text(
+                      'Gagal memuat gambar',
+                      style: TextStyle(color: AppColors.error),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(height: 12),
+            GestureDetector(
+              onTap: () => Navigator.pop(context),
+              child: Container(
+                padding: const EdgeInsets.symmetric(
+                    horizontal: 20, vertical: 10),
+                decoration: BoxDecoration(
+                  color: AppColors.white,
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: const Text(
+                  'Tutup',
+                  style: TextStyle(
+                    color: AppColors.mainColor,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

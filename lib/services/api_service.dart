@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'dart:io';
 import 'package:http/http.dart' as http;
 import 'package:http_parser/http_parser.dart';
+import 'package:image_picker/image_picker.dart';
 import '../constants/api.dart';
 
 class ApiException implements Exception {
@@ -28,6 +29,7 @@ class ApiService {
   void setToken(String token) => _token = token;
   void clearToken() => _token = null;
   void setOnUnauthorized(void Function() callback) => onUnauthorized = callback;
+  String? get token => _token;
 
   Map<String, String> get _headers {
     final headers = <String, String>{
@@ -39,8 +41,6 @@ class ApiService {
     }
     return headers;
   }
-
-  get token => null;
 
   Future<dynamic> _safeRequest(Future<http.Response> Function() request) async {
     try {
@@ -86,12 +86,15 @@ class ApiService {
     return _safeRequest(() => http.delete(url, headers: _headers));
   }
 
+  /// Upload multipart — sekarang pakai XFile (compatible Web & Mobile)
   Future<dynamic> postMultipart(
     String endpoint, {
     required Map<String, String> fields,
-    required File file,
+    required XFile? file,
     required String fileField,
   }) async {
+    if (file == null) throw ApiException('File tidak ditemukan');
+
     final url = Uri.parse('${ApiConfig.baseUrl}$endpoint');
     final request = http.MultipartRequest('POST', url);
 
@@ -102,9 +105,12 @@ class ApiService {
 
     fields.forEach((key, value) => request.fields[key] = value);
 
-    final multipartFile = await http.MultipartFile.fromPath(
+    // Baca bytes dari XFile — works di Web, Android, iOS
+    final bytes = await file.readAsBytes();
+    final multipartFile = http.MultipartFile.fromBytes(
       fileField,
-      file.path,
+      bytes,
+      filename: file.name,
       contentType: MediaType('image', 'jpeg'),
     );
     request.files.add(multipartFile);

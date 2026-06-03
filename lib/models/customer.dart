@@ -1,62 +1,67 @@
 class Customer {
   final int? id;
-  final String? username;
-  final String? name;
-  final String? email;
-  final String? phone;
-  final String? customerNumber;
-  final String? address;
-  final int? serviceId;
-  final String? golongan;
-  final String? zona;
-  final bool? isActive;
-  final String? createdAt;
+  final String nama;
+  final String noPelanggan;
+  final String noTelepon;
+  final String email;
+  final String alamat;
+  final String golongan;
+  final String zona;
+  final bool isAktif;
 
   Customer({
     this.id,
-    this.username,
-    this.name,
-    this.email,
-    this.phone,
-    this.customerNumber,
-    this.address,
-    this.serviceId,
-    this.golongan,
-    this.zona,
-    this.isActive,
-    this.createdAt,
+    required this.nama,
+    required this.noPelanggan,
+    required this.noTelepon,
+    required this.email,
+    required this.alamat,
+    required this.golongan,
+    required this.zona,
+    this.isAktif = true,
   });
 
   factory Customer.fromJson(Map<String, dynamic> json) {
+    // Mapping dari backend UKL PDAM ke field UI
+    final service = json['service'] as Map<String, dynamic>?;
     return Customer(
-      id: json['id'],
-      username: json['username'],
-      name: json['name'],
-      email: json['email'],
-      phone: json['phone'],
-      customerNumber: json['customer_number'],
-      address: json['address'],
-      serviceId: json['service_id'],
-      golongan: json['golongan'],
-      zona: json['zona'],
-      isActive: json['is_active'] ?? true,
-      createdAt: json['created_at'],
+      id: json['id'] as int?,
+      nama: json['name']?.toString() ?? json['nama']?.toString() ?? '',
+      noPelanggan: json['customer_number']?.toString() ??
+          json['noPelanggan']?.toString() ??
+          '',
+      noTelepon: json['phone']?.toString() ??
+          json['noTelepon']?.toString() ??
+          '',
+      email: json['email']?.toString() ?? '',
+      alamat: json['address']?.toString() ??
+          json['alamat']?.toString() ??
+          '',
+      golongan: service?['name']?.toString() ??
+          json['golongan']?.toString() ??
+          'R1',
+      zona: json['zona']?.toString() ?? 'Zona A',
+      isAktif: json['isAktif'] == true || json['isAktif'] == null,
     );
   }
+
+  get isActive => null;
+
+  get customerNumber => null;
+
+  get address => null;
 
   Map<String, dynamic> toJson() {
     return {
       'id': id,
-      'username': username,
-      'name': name,
+      'name': nama,
+      'customer_number': noPelanggan,
+      'phone': noTelepon,
       'email': email,
-      'phone': phone,
-      'customer_number': customerNumber,
-      'address': address,
-      'service_id': serviceId,
+      'address': alamat,
       'golongan': golongan,
       'zona': zona,
-      'is_active': isActive,
+      'isAktif': isAktif,
     };
   }
 }

@@ -47,8 +47,10 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
       errorMessage = null;
     });
     try {
-      final customerResponse = await _api.get('${ApiConfig.customers}?page=1&quantity=1');
-      final serviceResponse = await _api.get('${ApiConfig.services}?page=1&quantity=1');
+      final customerResponse =
+          await _api.get('${ApiConfig.customers}?page=1&quantity=1');
+      final serviceResponse =
+          await _api.get('${ApiConfig.services}?page=1&quantity=1');
       final servicesList = await _serviceApi.getServices(quantity: 5);
       final payments = await _paymentApi.getPayments(quantity: 100);
       final bills = await _api.get('${ApiConfig.bills}?page=1&quantity=100');
@@ -65,7 +67,8 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
         setState(() {
           totalCustomers = (customerResponse?['count'] as num?)?.toInt() ?? 0;
           totalServices = (serviceResponse?['count'] as num?)?.toInt() ?? 0;
-          pendingPayments = payments.where((p) => p['verified'] == false).length;
+          pendingPayments =
+              payments.where((p) => p['verified'] == false).length;
           totalBillsAmount = billsTotal;
           recentServices = servicesList;
           isLoading = false;
@@ -328,28 +331,32 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                           label: 'Laporan',
                           color: const Color(0xFF9C27B0),
                           bgColor: const Color(0xFFF3E5F5),
-                          onTap: () => _showSnack('Fitur laporan belum tersedia'),
+                          onTap: () =>
+                              _showSnack('Fitur laporan belum tersedia'),
                         ),
                         _menuItem(
                           icon: Icons.handyman_outlined,
                           label: 'Pemeliharaan',
                           color: const Color(0xFFF44336),
                           bgColor: const Color(0xFFFFEBEE),
-                          onTap: () => _showSnack('Fitur pemeliharaan belum tersedia'),
+                          onTap: () =>
+                              _showSnack('Fitur pemeliharaan belum tersedia'),
                         ),
                         _menuItem(
                           icon: Icons.location_on_outlined,
                           label: 'Zona\nWilayah',
                           color: const Color(0xFF00BCD4),
                           bgColor: const Color(0xFFE0F7FA),
-                          onTap: () => _showSnack('Fitur zona wilayah belum tersedia'),
+                          onTap: () =>
+                              _showSnack('Fitur zona wilayah belum tersedia'),
                         ),
                         _menuItem(
                           icon: Icons.settings_outlined,
                           label: 'Pengaturan',
                           color: const Color(0xFF607D8B),
                           bgColor: const Color(0xFFECEFF1),
-                          onTap: () => _showSnack('Fitur pengaturan belum tersedia'),
+                          onTap: () =>
+                              _showSnack('Fitur pengaturan belum tersedia'),
                         ),
                         _menuItem(
                           icon: Icons.logout_outlined,
@@ -488,8 +495,10 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                     else
                       ...recentServices.map((s) {
                         final String name = s['name']?.toString() ?? 'Layanan';
-                        final int minUsage = ((s['min_usage'] ?? 0) as num).toInt();
-                        final int maxUsage = ((s['max_usage'] ?? 0) as num).toInt();
+                        final int minUsage =
+                            ((s['min_usage'] ?? 0) as num).toInt();
+                        final int maxUsage =
+                            ((s['max_usage'] ?? 0) as num).toInt();
                         final int price = ((s['price'] ?? 0) as num).toInt();
                         return Padding(
                           padding: const EdgeInsets.only(bottom: 10),
@@ -513,7 +522,8 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                                   height: 44,
                                   decoration: const BoxDecoration(
                                     color: Color(0xFFFFF3E0),
-                                    borderRadius: BorderRadius.all(Radius.circular(12)),
+                                    borderRadius:
+                                        BorderRadius.all(Radius.circular(12)),
                                   ),
                                   child: const Icon(
                                     Icons.build,
@@ -523,7 +533,8 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                                 const SizedBox(width: 14),
                                 Expanded(
                                   child: Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
                                     children: [
                                       Text(
                                         name,
@@ -551,7 +562,8 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                                   ),
                                   decoration: const BoxDecoration(
                                     color: Color(0xFFE8F5E9),
-                                    borderRadius: BorderRadius.all(Radius.circular(20)),
+                                    borderRadius:
+                                        BorderRadius.all(Radius.circular(20)),
                                   ),
                                   child: Text(
                                     formatRupiah(price),
@@ -626,9 +638,8 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
               Icon(
                 trendUp ? Icons.trending_up : Icons.trending_down,
                 size: 14,
-                color: trendUp
-                    ? const Color(0xFF4CAF50)
-                    : const Color(0xFFE53935),
+                color:
+                    trendUp ? const Color(0xFF4CAF50) : const Color(0xFFE53935),
               ),
             ],
           ),

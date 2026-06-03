@@ -2,13 +2,11 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:intl/intl.dart';
-import 'package:provider/provider.dart';
 import '../constants/colors.dart';
 import '../utils/helpers.dart';
-import '../providers/app_provider.dart';
 import '../services/payment_api.dart';
-import '../widgets/bottom_nav.dart';
-import 'main_screen.dart';
+import '../services/api_service.dart';
+import '../constants/api.dart';
 
 class PaymentScreen extends StatefulWidget {
   final dynamic bill;
@@ -21,7 +19,7 @@ class PaymentScreen extends StatefulWidget {
 class _PaymentScreenState extends State<PaymentScreen> {
   final PaymentApi _paymentApi = PaymentApi();
   final ImagePicker _picker = ImagePicker();
-  final TextEditingController _noteCtrl = TextEditingController();
+  final ApiService _api = ApiService();
 
   File? _selectedImage;
   String? _paymentMethod;
@@ -40,17 +38,12 @@ class _PaymentScreenState extends State<PaymentScreen> {
     'Lainnya',
   ];
 
-  @override
-  void dispose() {
-    _noteCtrl.dispose();
-    super.dispose();
-  }
-
-  // --- Logic Invoice ---
+  // --- Invoice Logic ---
   int get _billPrice => ((widget.bill['price'] ?? 0) as num).toInt();
   int get _usage => ((widget.bill['usage_value'] ?? 0) as num).toInt();
   int get _year => ((widget.bill['year'] ?? 2026) as num).toInt();
   int get _month => ((widget.bill['month'] ?? 1) as num).toInt();
+  int get _billId => (widget.bill['id'] as num).toInt();
 
   String get _monthName {
     const names = [
@@ -66,7 +59,6 @@ class _PaymentScreenState extends State<PaymentScreen> {
   }
 
   int get _penalty {
-    // Denda 10% jika tagihan sudah lewat bulan berjalan
     final now = DateTime.now();
     final dueDate = DateTime(_year, _month + 1);
     if (now.isAfter(dueDate)) {
@@ -77,7 +69,7 @@ class _PaymentScreenState extends State<PaymentScreen> {
 
   int get _total => _billPrice + _penalty;
 
-  // --- Actions ---
+  // --- Pick Image ---
   Future<void> _pickImage() async {
     try {
       final XFile? picked = await _picker.pickImage(
@@ -86,9 +78,11 @@ class _PaymentScreenState extends State<PaymentScreen> {
         maxHeight: 1200,
         imageQuality: 85,
       );
+
       if (picked != null) {
         final file = File(picked.path);
         final size = await file.length();
+
         if (size > 5 * 1024 * 1024) {
           _showSnack('Ukuran file maksimal 5MB', isError: true);
           return;
@@ -100,6 +94,7 @@ class _PaymentScreenState extends State<PaymentScreen> {
     }
   }
 
+  // --- Select Date ---
   Future<void> _selectDate() async {
     final picked = await showDatePicker(
       context: context,
@@ -123,6 +118,7 @@ class _PaymentScreenState extends State<PaymentScreen> {
     if (picked != null) setState(() => _paymentDate = picked);
   }
 
+  // --- Submit Payment ---
   Future<void> _submitPayment() async {
     if (_paymentMethod == null) {
       _showSnack('Pilih metode pembayaran terlebih dahulu', isError: true);
@@ -136,8 +132,7 @@ class _PaymentScreenState extends State<PaymentScreen> {
     setState(() => _isLoading = true);
 
     try {
-      final billId = (widget.bill['id'] as num).toInt();
-      final response = await _paymentApi.createPayment(billId, _selectedImage!);
+      final response = await _paymentApi.createPayment(_billId, _selectedImage! as XFile);
 
       if (mounted) {
         setState(() => _isLoading = false);
@@ -173,23 +168,10 @@ class _PaymentScreenState extends State<PaymentScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: AppColors.bgLight,
-      bottomNavigationBar: BottomNav(
-        currentIndex: 1,
-        isAdmin: false,
-        onTap: (index) {
-          if (index == 1) return;
-          // Kembali ke MainScreen agar BottomNav tetap sinkron
-          Navigator.pushAndRemoveUntil(
-            context,
-            MaterialPageRoute(builder: (_) => const MainScreen()),
-            (route) => false,
-          );
-        },
-      ),
       body: CustomScrollView(
         physics: const AlwaysScrollableScrollPhysics(),
         slivers: [
-          // --- HEADER GRADIENT + INVOICE ---
+          // HEADER + INVOICE
           SliverToBoxAdapter(
             child: Container(
               decoration: const BoxDecoration(
@@ -210,7 +192,6 @@ class _PaymentScreenState extends State<PaymentScreen> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      // AppBar manual
                       Row(
                         children: [
                           GestureDetector(
@@ -240,7 +221,6 @@ class _PaymentScreenState extends State<PaymentScreen> {
                         ],
                       ),
                       const SizedBox(height: 20),
-                      // --- INVOICE CARD ---
                       _buildInvoiceCard(),
                     ],
                   ),
@@ -249,35 +229,26 @@ class _PaymentScreenState extends State<PaymentScreen> {
             ),
           ),
 
-          // --- FORM PEMBAYARAN ---
+          // FORM
           SliverToBoxAdapter(
             child: Padding(
               padding: const EdgeInsets.fromLTRB(20, 24, 20, 32),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // Metode Pembayaran
                   _sectionTitle('Metode Pembayaran'),
                   const SizedBox(height: 8),
                   _buildDropdown(),
                   const SizedBox(height: 20),
 
-                  // Tanggal Bayar
                   _sectionTitle('Tanggal Bayar'),
                   const SizedBox(height: 8),
                   _buildDatePicker(),
                   const SizedBox(height: 20),
 
-                  // Upload Foto
                   _sectionTitle('Bukti Pembayaran'),
                   const SizedBox(height: 8),
                   _buildUploadArea(),
-                  const SizedBox(height: 20),
-
-                  // Catatan
-                  _sectionTitle('Catatan (Opsional)'),
-                  const SizedBox(height: 8),
-                  _buildNoteField(),
                   const SizedBox(height: 32),
 
                   // Tombol Bayar
@@ -356,7 +327,6 @@ class _PaymentScreenState extends State<PaymentScreen> {
     );
   }
 
-  // --- INVOICE WIDGET ---
   Widget _buildInvoiceCard() {
     return Container(
       padding: const EdgeInsets.all(20),
@@ -374,7 +344,6 @@ class _PaymentScreenState extends State<PaymentScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Header Invoice
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
@@ -405,7 +374,6 @@ class _PaymentScreenState extends State<PaymentScreen> {
             ],
           ),
           const SizedBox(height: 16),
-          // Data Rows
           _invoiceRow('No. Tagihan', _billNumber, isBold: true),
           _invoiceRow('Periode', '$_monthName $_year'),
           _invoiceRow('Pemakaian', '$_usage Meter³'),
@@ -418,12 +386,10 @@ class _PaymentScreenState extends State<PaymentScreen> {
               labelColor: AppColors.error,
             ),
           ],
-          // Dotted Divider
           const Padding(
             padding: EdgeInsets.symmetric(vertical: 12),
             child: DottedDivider(),
           ),
-          // Total
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
@@ -483,14 +449,13 @@ class _PaymentScreenState extends State<PaymentScreen> {
     );
   }
 
-  // --- DROPDOWN METODE ---
   Widget _buildDropdown() {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 16),
       decoration: BoxDecoration(
         color: AppColors.white,
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: AppColors.subtle),
+        border: Border.all(color: AppColors.grey200),
       ),
       child: DropdownButtonHideUnderline(
         child: DropdownButton<String>(
@@ -530,7 +495,6 @@ class _PaymentScreenState extends State<PaymentScreen> {
     );
   }
 
-  // --- DATE PICKER ---
   Widget _buildDatePicker() {
     return GestureDetector(
       onTap: _selectDate,
@@ -539,7 +503,7 @@ class _PaymentScreenState extends State<PaymentScreen> {
         decoration: BoxDecoration(
           color: AppColors.white,
           borderRadius: BorderRadius.circular(14),
-          border: Border.all(color: AppColors.subtle),
+          border: Border.all(color: AppColors.grey200),
         ),
         child: Row(
           children: [
@@ -564,7 +528,6 @@ class _PaymentScreenState extends State<PaymentScreen> {
     );
   }
 
-  // --- UPLOAD AREA ---
   Widget _buildUploadArea() {
     return GestureDetector(
       onTap: _pickImage,
@@ -577,7 +540,7 @@ class _PaymentScreenState extends State<PaymentScreen> {
           border: Border.all(
             color: _selectedImage != null
                 ? AppColors.mainColor
-                : AppColors.subtle,
+                : AppColors.grey200,
             width: _selectedImage != null ? 2 : 1,
           ),
         ),
@@ -601,7 +564,7 @@ class _PaymentScreenState extends State<PaymentScreen> {
                           color: AppColors.success, size: 18),
                       const SizedBox(width: 6),
                       Text(
-                        'Foto berhasil diunggah',
+                        'Foto berhasil dipilih',
                         style: TextStyle(
                           fontSize: 13,
                           color: AppColors.success,
@@ -649,44 +612,9 @@ class _PaymentScreenState extends State<PaymentScreen> {
       ),
     );
   }
-
-  // --- NOTE FIELD ---
-  Widget _buildNoteField() {
-    return Container(
-      decoration: BoxDecoration(
-        color: AppColors.white,
-        borderRadius: BorderRadius.circular(14),
-        boxShadow: const [
-          BoxShadow(
-            color: Color(0x0A000000),
-            blurRadius: 8,
-            offset: Offset(0, 2),
-          ),
-        ],
-      ),
-      child: TextField(
-        controller: _noteCtrl,
-        maxLines: 3,
-        decoration: InputDecoration(
-          hintText: 'Tambahkan Catatan jika diperlukan...',
-          hintStyle: TextStyle(
-            fontSize: 14,
-            color: AppColors.grey500,
-          ),
-          contentPadding: const EdgeInsets.all(16),
-          border: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(14),
-            borderSide: BorderSide.none,
-          ),
-          filled: true,
-          fillColor: AppColors.white,
-        ),
-      ),
-    );
-  }
 }
 
-// --- DOTTED DIVIDER WIDGET ---
+// DOTTED DIVIDER
 class DottedDivider extends StatelessWidget {
   const DottedDivider({super.key});
 

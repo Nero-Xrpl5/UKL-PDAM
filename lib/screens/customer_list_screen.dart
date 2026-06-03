@@ -1,11 +1,8 @@
 import 'package:flutter/material.dart';
 import '../constants/colors.dart';
-import '../utils/helpers.dart';
+import '../models/customer.dart';
 import '../services/customer_api.dart';
-import '../services/service_api.dart';
-import '../widgets/custom_card.dart';
-import '../widgets/custom_textfield.dart';
-import '../widgets/shimmer_card.dart';
+import 'customer_form_screen.dart';
 
 class CustomerListScreen extends StatefulWidget {
   const CustomerListScreen({super.key});
@@ -15,391 +12,145 @@ class CustomerListScreen extends StatefulWidget {
 }
 
 class _CustomerListScreenState extends State<CustomerListScreen> {
-  final CustomerApi _api = CustomerApi();
-  final ServiceApi _serviceApi = ServiceApi();
-  List<dynamic> customers = [];
-  List<dynamic> filteredCustomers = [];
-  List<dynamic> services = [];
-  bool isLoading = true;
-  bool loadingServices = false;
-  String? errorMessage;
-  final _searchCtrl = TextEditingController();
+  List<Customer> _allCustomers = [];
+  List<Customer> _filtered = [];
+  bool _isLoading = true;
+  String _searchQuery = '';
+  String _filterStatus = 'semua'; // 'semua' | 'aktif' | 'nonaktif'
+
+  final TextEditingController _searchCtrl = TextEditingController();
 
   @override
   void initState() {
     super.initState();
-    _loadCustomers();
-    _searchCtrl.addListener(_onSearch);
+    _loadData();
   }
 
   @override
   void dispose() {
-    _searchCtrl.removeListener(_onSearch);
     _searchCtrl.dispose();
     super.dispose();
   }
 
-  void _onSearch() {
-    final query = _searchCtrl.text.toLowerCase();
-    setState(() {
-      filteredCustomers = customers.where((c) {
-        final name = c['name']?.toString().toLowerCase() ?? '';
-        final number = c['customer_number']?.toString().toLowerCase() ?? '';
-        return name.contains(query) || number.contains(query);
-      }).toList();
-    });
-  }
-
-  Future<void> _loadCustomers() async {
-    setState(() {
-      isLoading = true;
-      errorMessage = null;
-    });
+  Future<void> _loadData() async {
+    setState(() => _isLoading = true);
     try {
-      final data = await _api.getCustomers();
+      final data = await CustomerApi.getCustomers();
       setState(() {
-        customers = data;
-        filteredCustomers = data;
-        isLoading = false;
+        _allCustomers = data;
+        _applyFilter();
+        _isLoading = false;
       });
     } catch (e) {
-      setState(() {
-        errorMessage = e.toString();
-        isLoading = false;
-      });
+      setState(() => _isLoading = false);
+      _showSnack(e.toString(), isError: true);
     }
   }
 
-  Future<void> _loadServices() async {
-    setState(() => loadingServices = true);
-    try {
-      final data = await _serviceApi.getServices();
-      setState(() {
-        services = data;
-        loadingServices = false;
-      });
-    } catch (e) {
-      setState(() => loadingServices = false);
+  void _applyFilter() {
+    List<Customer> result = _allCustomers;
+
+    if (_filterStatus == 'aktif') {
+      result = result.where((c) => c.isAktif).toList();
+    } else if (_filterStatus == 'nonaktif') {
+      result = result.where((c) => !c.isAktif).toList();
     }
+
+    if (_searchQuery.isNotEmpty) {
+      final q = _searchQuery.toLowerCase();
+      result = result
+          .where((c) =>
+              c.nama.toLowerCase().contains(q) ||
+              c.noPelanggan.toLowerCase().contains(q))
+          .toList();
+    }
+
+    setState(() => _filtered = result);
   }
 
-  Future<void> _deleteCustomer(int id) async {
+  int get _countSemua => _allCustomers.length;
+  int get _countAktif => _allCustomers.where((c) => c.isAktif).length;
+  int get _countNonAktif => _allCustomers.where((c) => !c.isAktif).length;
+
+  Future<void> _delete(Customer c) async {
+    if (c.id == null) return;
+
     final confirm = await showDialog<bool>(
       context: context,
-      builder: (context) => AlertDialog(
+      builder: (_) => AlertDialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: const Text('Hapus Pelanggan?',
-            style: TextStyle(fontWeight: FontWeight.bold)),
-        content:
-            const Text('Semua data terkait pelanggan ini akan ikut terhapus.'),
+        title: const Text('Hapus Customer',
+            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+        content: Text(
+            'Yakin ingin menghapus "${c.nama}"?\nTindakan ini tidak dapat dibatalkan.'),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
-            child: const Text('Batal'),
+            child: const Text('Batal', style: TextStyle(color: Colors.grey)),
           ),
           ElevatedButton(
             style: ElevatedButton.styleFrom(
               backgroundColor: AppColors.error,
-              foregroundColor: AppColors.white,
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(10)),
             ),
             onPressed: () => Navigator.pop(context, true),
-            child: const Text('Hapus'),
+            child: const Text('Hapus', style: TextStyle(color: Colors.white)),
           ),
         ],
       ),
     );
-    if (confirm != true) return;
 
+    if (confirm != true) return;
     try {
-      await _api.deleteCustomer(id);
-      _loadCustomers();
+      await CustomerApi.deleteCustomer(c.id!);
+      await _loadData();
+      _showSnack('Customer "${c.nama}" berhasil dihapus');
     } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-              content: Text('Error: $e'), backgroundColor: AppColors.error),
-        );
-      }
+      _showSnack(e.toString(), isError: true);
     }
   }
 
-  Future<void> _showAddEditDialog({dynamic customer}) async {
-    final bool isEdit = customer != null;
-
-    // Load services untuk dropdown (dibutuhkan untuk Add & Edit)
-    await _loadServices();
-    if (services.isEmpty && mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text(
-              'Tidak ada layanan tersedia. Buat layanan di menu Layanan terlebih dahulu.'),
-          backgroundColor: AppColors.warning,
-          duration: Duration(seconds: 4),
-        ),
-      );
-      return;
+  void _toAdd() async {
+    final ok = await Navigator.push<bool>(
+      context,
+      MaterialPageRoute(builder: (_) => const CustomerFormScreen()),
+    );
+    if (ok == true) {
+      await _loadData();
+      _showSnack('Customer baru berhasil ditambahkan');
     }
+  }
+
+  void _toEdit(Customer c) async {
+    final ok = await Navigator.push<bool>(
+      context,
+      MaterialPageRoute(
+          builder: (_) => CustomerFormScreen(customer: c)),
+    );
+    if (ok == true) {
+      await _loadData();
+      _showSnack('Data customer berhasil diperbarui');
+    }
+  }
+
+  void _showSnack(String msg, {bool isError = false}) {
     if (!mounted) return;
-
-    final nameCtrl =
-        TextEditingController(text: customer?['name']?.toString() ?? '');
-    final phoneCtrl =
-        TextEditingController(text: customer?['phone']?.toString() ?? '');
-    final addressCtrl =
-        TextEditingController(text: customer?['address']?.toString() ?? '');
-    final numberCtrl = TextEditingController(
-        text: customer?['customer_number']?.toString() ?? '');
-    final passwordCtrl = TextEditingController();
-    bool obscurePassword = true;
-
-    int? selectedServiceId;
-    if (isEdit) {
-      final dynamic sid = customer?['service_id'];
-      selectedServiceId = sid is int ? sid : (sid as num?)?.toInt();
-    } else if (services.isNotEmpty) {
-      final dynamic sid = services.first['id'];
-      selectedServiceId = sid is int ? sid : (sid as num).toInt();
-    }
-
-    // Jika saat edit service_id tidak ada di list services (edge case), default ke first
-    if (selectedServiceId != null &&
-        !services.any((s) {
-          final dynamic sid = s['id'];
-          final int id = sid is int ? sid : (sid as num).toInt();
-          return id == selectedServiceId;
-        })) {
-      selectedServiceId =
-          services.isNotEmpty ? (services.first['id'] as num).toInt() : null;
-    }
-
-    await showDialog(
-      context: context,
-      builder: (context) => StatefulBuilder(
-        builder: (context, setDialogState) => AlertDialog(
-          shape:
-              RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-          title: Text(
-            isEdit ? 'Edit Customer' : 'Tambah Customer',
-            style: const TextStyle(fontWeight: FontWeight.bold),
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Row(children: [
+          Icon(
+            isError ? Icons.error_outline : Icons.check_circle_outline,
+            color: Colors.white,
+            size: 18,
           ),
-          content: SingleChildScrollView(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                CustomTextField(
-                  label: 'Nama',
-                  hint: 'Nama lengkap',
-                  controller: nameCtrl,
-                  icon: Icons.person,
-                ),
-                const SizedBox(height: 12),
-                CustomTextField(
-                  label: 'No Telepon',
-                  hint: '08xx',
-                  controller: phoneCtrl,
-                  icon: Icons.phone,
-                ),
-                const SizedBox(height: 12),
-                CustomTextField(
-                  label: 'Alamat',
-                  hint: 'Alamat',
-                  controller: addressCtrl,
-                  icon: Icons.home,
-                ),
-                const SizedBox(height: 12),
-                CustomTextField(
-                  label: 'No Pelanggan (NIK)',
-                  hint: 'NIK / No Pelanggan',
-                  controller: numberCtrl,
-                  icon: Icons.badge,
-                ),
-                const SizedBox(height: 4),
-                const Text(
-                  'No Pelanggan akan digunakan sebagai Username untuk login',
-                  style: TextStyle(
-                      fontSize: 11,
-                      color: AppColors.dark3,
-                      fontStyle: FontStyle.italic),
-                ),
-                if (!isEdit) ...[
-                  const SizedBox(height: 12),
-                  TextFormField(
-                    controller: passwordCtrl,
-                    obscureText: obscurePassword,
-                    decoration: InputDecoration(
-                      labelText: 'Password',
-                      hintText: 'Minimal 6 karakter',
-                      prefixIcon:
-                          const Icon(Icons.lock_outline, color: AppColors.dark3),
-                      suffixIcon: IconButton(
-                        icon: Icon(
-                          obscurePassword
-                              ? Icons.visibility_off
-                              : Icons.visibility,
-                          color: AppColors.dark3,
-                          size: 20,
-                        ),
-                        onPressed: () => setDialogState(
-                            () => obscurePassword = !obscurePassword),
-                      ),
-                      filled: true,
-                      fillColor: AppColors.grey100,
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(12),
-                        borderSide: BorderSide.none,
-                      ),
-                      contentPadding: const EdgeInsets.symmetric(
-                          horizontal: 16, vertical: 14),
-                    ),
-                  ),
-                  const SizedBox(height: 4),
-                  const Text(
-                    'Password ini akan digunakan customer untuk login',
-                    style: TextStyle(
-                        fontSize: 11,
-                        color: AppColors.dark3,
-                        fontStyle: FontStyle.italic),
-                  ),
-                ],
-                const SizedBox(height: 12),
-                // DROPDOWN LAYANAN: Tampil untuk Add & Edit
-                if (loadingServices)
-                  const Center(
-                    child: Padding(
-                      padding: EdgeInsets.all(16),
-                      child: CircularProgressIndicator(),
-                    ),
-                  )
-                else if (services.isEmpty)
-                  Container(
-                    padding: const EdgeInsets.all(12),
-                    decoration: BoxDecoration(
-                      color: const Color(0x1AFF3B3B),
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: const Row(
-                      children: [
-                        Icon(Icons.error, color: AppColors.error),
-                        SizedBox(width: 8),
-                        Expanded(
-                          child: Text(
-                            'Tidak ada layanan. Buat layanan dulu di menu Layanan.',
-                            style:
-                                TextStyle(fontSize: 13, color: AppColors.error),
-                          ),
-                        ),
-                      ],
-                    ),
-                  )
-                else ...[
-                  const Text(
-                    'Pilih Layanan *',
-                    style: TextStyle(
-                        fontSize: 14,
-                        fontWeight: FontWeight.w600,
-                        color: AppColors.dark1),
-                  ),
-                  const SizedBox(height: 8),
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 16),
-                    decoration: BoxDecoration(
-                      color: AppColors.white,
-                      borderRadius: BorderRadius.circular(16),
-                      border: Border.all(color: AppColors.subtle),
-                    ),
-                    child: DropdownButtonHideUnderline(
-                      child: DropdownButton<int>(
-                        isExpanded: true,
-                        value: selectedServiceId,
-                        hint: const Text('Pilih Layanan'),
-                        icon: const Icon(Icons.keyboard_arrow_down,
-                            color: AppColors.mainColor),
-                        items: services.map<DropdownMenuItem<int>>((s) {
-                          final dynamic rawId = s['id'];
-                          final int id =
-                              rawId is int ? rawId : (rawId as num).toInt();
-                          final String name =
-                              s['name']?.toString() ?? 'Layanan $id';
-                          return DropdownMenuItem<int>(
-                            value: id,
-                            child: Text('$name (Rp ${s['price']})',
-                                style: const TextStyle(fontSize: 14)),
-                          );
-                        }).toList(),
-                        onChanged: (v) =>
-                            setDialogState(() => selectedServiceId = v),
-                      ),
-                    ),
-                  ),
-                ],
-              ],
-            ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text('Batal'),
-            ),
-            ElevatedButton(
-              style: ElevatedButton.styleFrom(
-                backgroundColor: AppColors.mainColor,
-                foregroundColor: AppColors.white,
-                shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12)),
-              ),
-              onPressed: () async {
-                if (selectedServiceId == null) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
-                      content: Text('Pilih layanan terlebih dahulu!'),
-                      backgroundColor: AppColors.warning,
-                    ),
-                  );
-                  return;
-                }
-                if (!isEdit &&
-                    (passwordCtrl.text.isEmpty ||
-                        passwordCtrl.text.length < 6)) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
-                      content: Text('Password minimal 6 karakter!'),
-                      backgroundColor: AppColors.warning,
-                    ),
-                  );
-                  return;
-                }
-                Navigator.pop(context);
-                final Map<String, dynamic> data = {
-                  'name': nameCtrl.text,
-                  'phone': phoneCtrl.text,
-                  'address': addressCtrl.text,
-                  'customer_number': numberCtrl.text,
-                  'service_id': selectedServiceId, // ⬅️ WAJIB UNTUK ADD & UPDATE
-                };
-                try {
-                  if (isEdit) {
-                    await _api.updateCustomer(customer['id'], data);
-                  } else {
-                    data['username'] = numberCtrl.text;
-                    data['password'] = passwordCtrl.text;
-                    await _api.createCustomer(data);
-                  }
-                  _loadCustomers();
-                } catch (e) {
-                  if (mounted) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                          content: Text('Error: $e'),
-                          backgroundColor: AppColors.error),
-                    );
-                  }
-                }
-              },
-              child: Text(isEdit ? 'Update' : 'Simpan'),
-            ),
-          ],
-        ),
+          const SizedBox(width: 8),
+          Expanded(child: Text(msg, style: const TextStyle(fontSize: 13))),
+        ]),
+        backgroundColor: isError ? AppColors.error : AppColors.success,
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        margin: const EdgeInsets.all(16),
       ),
     );
   }
@@ -408,195 +159,345 @@ class _CustomerListScreenState extends State<CustomerListScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: AppColors.bgLight,
-      appBar: AppBar(
-        title: const Text('Data Pelanggan'),
-        backgroundColor: AppColors.mainColor,
-        actions: [
-          Padding(
-            padding: const EdgeInsets.only(right: 8),
-            child: Chip(
-              label: Text(
-                '${filteredCustomers.length}',
-                style: const TextStyle(color: AppColors.white, fontSize: 12),
-              ),
-              backgroundColor: const Color(0x40FFFFFF),
-              padding: EdgeInsets.zero,
-            ),
-          ),
-        ],
-      ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: () => _showAddEditDialog(),
-        backgroundColor: AppColors.mainColor,
-        child: const Icon(Icons.add),
-      ),
       body: Column(
         children: [
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
-            child: TextField(
-              controller: _searchCtrl,
-              decoration: InputDecoration(
-                hintText: 'Cari nama atau nomor pelanggan...',
-                prefixIcon:
-                    const Icon(Icons.search, color: AppColors.dark3),
-                filled: true,
-                fillColor: AppColors.white,
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
-                  borderSide: BorderSide.none,
-                ),
-                contentPadding: const EdgeInsets.symmetric(vertical: 12),
-              ),
-            ),
-          ),
+          _buildHeader(),
           Expanded(
-            child: isLoading
-                ? ListView(
-                    padding: const EdgeInsets.all(16),
-                    children: const [
-                      ShimmerCard(height: 80),
-                      SizedBox(height: 12),
-                      ShimmerCard(height: 80),
-                    ],
-                  )
-                : errorMessage != null
-                    ? Center(
-                        child: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            const Icon(Icons.error_outline,
-                                color: AppColors.error, size: 48),
-                            const SizedBox(height: 12),
-                            Text('Gagal memuat data',
-                                style:
-                                    TextStyle(color: AppColors.grey600)),
-                            TextButton(
-                                onPressed: _loadCustomers,
-                                child: const Text('Coba Lagi')),
-                          ],
-                        ),
-                      )
-                    : filteredCustomers.isEmpty
-                        ? Center(
-                            child: Column(
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              children: [
-                                Icon(Icons.people_outline,
-                                    size: 64, color: AppColors.dark3),
-                                const SizedBox(height: 16),
-                                Text(
-                                  _searchCtrl.text.isEmpty
-                                      ? 'Belum ada pelanggan'
-                                      : 'Tidak ditemukan',
-                                  style: const TextStyle(
-                                      color: AppColors.dark3,
-                                      fontSize: 16),
-                                ),
-                              ],
-                            ),
-                          )
-                        : RefreshIndicator(
-                            onRefresh: _loadCustomers,
-                            child: ListView.builder(
-                              padding: const EdgeInsets.all(16),
-                              itemCount: filteredCustomers.length,
-                              itemBuilder: (context, index) {
-                                final c = filteredCustomers[index];
-                                final String nameStr =
-                                    c['name']?.toString() ?? '-';
-                                final String firstChar = nameStr.isNotEmpty
-                                    ? nameStr[0].toUpperCase()
-                                    : '?';
-                                final service =
-                                    c['service'] as Map<String, dynamic>?;
-
-                                return Padding(
-                                  padding:
-                                      const EdgeInsets.only(bottom: 12),
-                                  child: CustomCard(
-                                    padding: const EdgeInsets.all(16),
-                                    child: Row(
-                                      children: [
-                                        CircleAvatar(
-                                          backgroundColor:
-                                              AppColors.subtle,
-                                          child: Text(
-                                            firstChar,
-                                            style: const TextStyle(
-                                              color: AppColors.mainColor,
-                                              fontWeight: FontWeight.bold,
-                                            ),
-                                          ),
-                                        ),
-                                        const SizedBox(width: 12),
-                                        Expanded(
-                                          child: Column(
-                                            crossAxisAlignment:
-                                                CrossAxisAlignment.start,
-                                            children: [
-                                              Text(
-                                                nameStr,
-                                                style: const TextStyle(
-                                                    fontWeight:
-                                                        FontWeight.bold),
-                                              ),
-                                              Text(
-                                                c['customer_number']
-                                                        ?.toString() ??
-                                                    '-',
-                                                style: const TextStyle(
-                                                    fontSize: 12,
-                                                    color:
-                                                        AppColors.dark3),
-                                              ),
-                                              Text(
-                                                c['phone']?.toString() ??
-                                                    '-',
-                                                style: const TextStyle(
-                                                    fontSize: 12,
-                                                    color:
-                                                        AppColors.dark3),
-                                              ),
-                                              if (service != null)
-                                                Text(
-                                                  'Layanan: ${service['name'] ?? '-'}',
-                                                  style: const TextStyle(
-                                                    fontSize: 11,
-                                                    color: AppColors
-                                                        .mainColor,
-                                                    fontWeight:
-                                                        FontWeight.w600,
-                                                  ),
-                                                ),
-                                            ],
-                                          ),
-                                        ),
-                                        IconButton(
-                                          icon: const Icon(Icons.edit,
-                                              color: AppColors.mainColor),
-                                          onPressed: () =>
-                                              _showAddEditDialog(
-                                                  customer: c),
-                                        ),
-                                        IconButton(
-                                          icon: const Icon(Icons.delete,
-                                              color: AppColors.error),
-                                          onPressed: () =>
-                                              _deleteCustomer(
-                                                  (c['id'] as num)
-                                                      .toInt()),
-                                        ),
-                                      ],
-                                    ),
-                                  ),
-                                );
-                              },
-                            ),
+            child: _isLoading
+                ? const Center(
+                    child: CircularProgressIndicator(color: AppColors.mainColor))
+                : RefreshIndicator(
+                    onRefresh: _loadData,
+                    color: AppColors.mainColor,
+                    child: _filtered.isEmpty
+                        ? _buildEmpty()
+                        : ListView.builder(
+                            padding: const EdgeInsets.fromLTRB(16, 12, 16, 100),
+                            itemCount: _filtered.length,
+                            itemBuilder: (_, i) => _buildCard(_filtered[i]),
                           ),
+                  ),
           ),
         ],
       ),
+      floatingActionButton: FloatingActionButton.extended(
+        onPressed: _toAdd,
+        backgroundColor: AppColors.mainColor,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        icon: const Icon(Icons.person_add_outlined, color: Colors.white),
+        label: const Text('Tambah Customer',
+            style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+      ),
+    );
+  }
+
+  Widget _buildHeader() {
+    return Container(
+      decoration: const BoxDecoration(
+        gradient: LinearGradient(
+          colors: [Color(0xFF2659BF), AppColors.mainColor],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        borderRadius: BorderRadius.only(
+          bottomLeft: Radius.circular(28),
+          bottomRight: Radius.circular(28),
+        ),
+      ),
+      child: SafeArea(
+        bottom: false,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(16, 8, 16, 20),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  GestureDetector(
+                    onTap: () => Navigator.pop(context),
+                    child: Container(
+                      width: 40,
+                      height: 40,
+                      decoration: BoxDecoration(
+                        color: Colors.white.withOpacity(0.2),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: const Icon(Icons.arrow_back_ios_new,
+                          color: Colors.white, size: 18),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  const Text(
+                    'Data Customer',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 20,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  const Spacer(),
+                  Container(
+                    width: 48,
+                    height: 48,
+                    decoration: BoxDecoration(
+                      color: Colors.white.withOpacity(0.15),
+                      shape: BoxShape.circle,
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 14),
+              Container(
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(14),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.08),
+                      blurRadius: 10,
+                      offset: const Offset(0, 3),
+                    ),
+                  ],
+                ),
+                child: TextField(
+                  controller: _searchCtrl,
+                  onChanged: (v) {
+                    setState(() => _searchQuery = v);
+                    _applyFilter();
+                  },
+                  decoration: InputDecoration(
+                    hintText: 'Cari nama / no. pelanggan..',
+                    hintStyle: TextStyle(color: Colors.grey[400], fontSize: 13),
+                    prefixIcon:
+                        Icon(Icons.search, color: Colors.grey[400], size: 20),
+                    suffixIcon: _searchQuery.isNotEmpty
+                        ? IconButton(
+                            icon: const Icon(Icons.clear, size: 18),
+                            onPressed: () {
+                              _searchCtrl.clear();
+                              setState(() => _searchQuery = '');
+                              _applyFilter();
+                            },
+                          )
+                        : null,
+                    border: InputBorder.none,
+                    contentPadding: const EdgeInsets.symmetric(
+                        horizontal: 16, vertical: 13),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 12),
+              Row(
+                children: [
+                  _filterTab('Semua($_countSemua)', 'semua'),
+                  const SizedBox(width: 8),
+                  _filterTab('Aktif($_countAktif)', 'aktif'),
+                  const SizedBox(width: 8),
+                  _filterTab('Non-Aktif($_countNonAktif)', 'nonaktif'),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _filterTab(String label, String value) {
+    final selected = _filterStatus == value;
+    return GestureDetector(
+      onTap: () {
+        setState(() => _filterStatus = value);
+        _applyFilter();
+      },
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 180),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
+        decoration: BoxDecoration(
+          color: selected
+              ? Colors.white
+              : Colors.white.withOpacity(0.18),
+          borderRadius: BorderRadius.circular(20),
+        ),
+        child: Text(
+          label,
+          style: TextStyle(
+            color: selected ? AppColors.mainColor : Colors.white,
+            fontWeight: selected ? FontWeight.bold : FontWeight.w500,
+            fontSize: 12,
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildCard(Customer c) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 10),
+      decoration: BoxDecoration(
+        color: AppColors.white,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.04),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+        child: Row(
+          children: [
+            Container(
+              width: 50,
+              height: 50,
+              decoration: const BoxDecoration(
+                gradient: LinearGradient(
+                  colors: [AppColors.mainColor, Color(0xFF2659BF)],
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                ),
+                shape: BoxShape.circle,
+              ),
+              alignment: Alignment.center,
+              child: Text(
+                c.nama.isNotEmpty ? c.nama[0].toUpperCase() : '?',
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontWeight: FontWeight.bold,
+                  fontSize: 20,
+                ),
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    c.nama,
+                    style: const TextStyle(
+                      fontWeight: FontWeight.bold,
+                      fontSize: 14,
+                      color: AppColors.dark1,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    c.noPelanggan,
+                    style: const TextStyle(
+                      color: AppColors.mainColor,
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    '${c.alamat}  •  ${c.golongan}',
+                    style: TextStyle(
+                      color: AppColors.grey600,
+                      fontSize: 11,
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(width: 8),
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: 10, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: c.isAktif
+                        ? const Color(0xFFE8F5E9)
+                        : AppColors.grey100,
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  child: Text(
+                    c.isAktif ? 'Aktif' : 'Non-Aktif',
+                    style: TextStyle(
+                      color: c.isAktif
+                          ? AppColors.success
+                          : AppColors.grey600,
+                      fontSize: 10,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Row(
+                  children: [
+                    _iconBtn(
+                      icon: Icons.edit_outlined,
+                      color: AppColors.mainColor,
+                      bg: AppColors.grey100,
+                      onTap: () => _toEdit(c),
+                    ),
+                    const SizedBox(width: 6),
+                    _iconBtn(
+                      icon: Icons.delete_outline,
+                      color: AppColors.error,
+                      bg: const Color(0xFFFFEBEE),
+                      onTap: () => _delete(c),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _iconBtn({
+    required IconData icon,
+    required Color color,
+    required Color bg,
+    required VoidCallback onTap,
+  }) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        width: 34,
+        height: 34,
+        decoration: BoxDecoration(
+          color: bg,
+          borderRadius: BorderRadius.circular(9),
+        ),
+        child: Icon(icon, color: color, size: 17),
+      ),
+    );
+  }
+
+  Widget _buildEmpty() {
+    return ListView(
+      children: [
+        const SizedBox(height: 80),
+        Column(
+          children: [
+            Icon(Icons.people_outline, size: 72, color: Colors.grey[300]),
+            const SizedBox(height: 12),
+            Text(
+              'Tidak ada customer',
+              style: TextStyle(
+                  color: AppColors.grey600,
+                  fontSize: 15,
+                  fontWeight: FontWeight.w600),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              'Coba ubah filter atau tambah customer baru',
+              style: TextStyle(color: AppColors.grey400, fontSize: 12),
+            ),
+          ],
+        ),
+      ],
     );
   }
 }

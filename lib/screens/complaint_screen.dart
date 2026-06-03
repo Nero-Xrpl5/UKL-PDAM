@@ -1,12 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:tirta_app/screens/main_screen.dart';
 import '../constants/colors.dart';
 import '../providers/app_provider.dart';
 import '../models/complaint.dart';
 import '../services/complaint_service.dart';
 import '../services/service_api.dart';
-import '../widgets/bottom_nav.dart';
 import '../widgets/shimmer_card.dart';
 
 class ComplaintScreen extends StatefulWidget {
@@ -238,16 +236,15 @@ class _ComplaintScreenState extends State<ComplaintScreen> {
                                                 try {
                                                   final all = await _serviceApi
                                                       .getServices();
-                                                  final filtered = all
-                                                      .where((s) {
-                                                        final name = s['name']
-                                                                ?.toString()
-                                                                .toLowerCase() ??
-                                                            '';
-                                                        return name.contains(
-                                                            val.toLowerCase());
-                                                      })
-                                                      .toList();
+                                                  final filtered =
+                                                      all.where((s) {
+                                                    final name = s['name']
+                                                            ?.toString()
+                                                            .toLowerCase() ??
+                                                        '';
+                                                    return name.contains(
+                                                        val.toLowerCase());
+                                                  }).toList();
                                                   setModalState(() {
                                                     searchResults = filtered;
                                                     isSearching = false;
@@ -257,8 +254,8 @@ class _ComplaintScreenState extends State<ComplaintScreen> {
                                                       isSearching = false);
                                                 }
                                               } else {
-                                                setModalState(() =>
-                                                    searchResults = []);
+                                                setModalState(
+                                                    () => searchResults = []);
                                               }
                                             },
                                           ),
@@ -325,8 +322,8 @@ class _ComplaintScreenState extends State<ComplaintScreen> {
                                 ),
                                 const SizedBox(height: 8),
                                 Container(
-                                  padding:
-                                      const EdgeInsets.symmetric(horizontal: 16),
+                                  padding: const EdgeInsets.symmetric(
+                                      horizontal: 16),
                                   decoration: BoxDecoration(
                                     color: AppColors.white,
                                     borderRadius: BorderRadius.circular(14),
@@ -374,8 +371,8 @@ class _ComplaintScreenState extends State<ComplaintScreen> {
                                 ),
                                 const SizedBox(height: 8),
                                 Container(
-                                  padding:
-                                      const EdgeInsets.symmetric(horizontal: 16),
+                                  padding: const EdgeInsets.symmetric(
+                                      horizontal: 16),
                                   decoration: BoxDecoration(
                                     color: AppColors.white,
                                     borderRadius: BorderRadius.circular(14),
@@ -392,8 +389,7 @@ class _ComplaintScreenState extends State<ComplaintScreen> {
                                         CrossAxisAlignment.start,
                                     children: [
                                       const Padding(
-                                        padding:
-                                            EdgeInsets.only(top: 14),
+                                        padding: EdgeInsets.only(top: 14),
                                         child: Icon(Icons.format_list_bulleted,
                                             color: AppColors.dark3, size: 22),
                                       ),
@@ -576,9 +572,8 @@ class _ComplaintScreenState extends State<ComplaintScreen> {
                                         description: descCtrl.text.trim(),
                                         category: category,
                                         isActive: isActive,
-                                        createdAt:
-                                            complaint?.createdAt ??
-                                                DateTime.now(),
+                                        createdAt: complaint?.createdAt ??
+                                            DateTime.now(),
                                       );
                                       try {
                                         if (isEdit) {
@@ -667,18 +662,6 @@ class _ComplaintScreenState extends State<ComplaintScreen> {
 
     return Scaffold(
       backgroundColor: AppColors.bgLight,
-      bottomNavigationBar: BottomNav(
-        currentIndex: 2,
-        onTap: (index) {
-          if (index == 2) return;
-          // Kembali ke MainScreen agar BottomNav sinkron
-          Navigator.pushAndRemoveUntil(
-            context,
-            MaterialPageRoute(builder: (_) => const MainScreen()),
-            (route) => false,
-          );
-        }, isAdmin: false,
-      ),
       floatingActionButton: FloatingActionButton.extended(
         onPressed: () => _showForm(),
         backgroundColor: AppColors.mainColor,
@@ -781,14 +764,20 @@ class _ComplaintScreenState extends State<ComplaintScreen> {
                         child: Row(
                           mainAxisAlignment: MainAxisAlignment.spaceAround,
                           children: [
+                            _statItem(complaints.length.toString(), 'Total',
+                                AppColors.mainColor),
                             _statItem(
-                                complaints.length.toString(), 'Total', AppColors.mainColor),
-                            _statItem(
-                                complaints.where((c) => c.isActive).length.toString(),
+                                complaints
+                                    .where((c) => c.isActive)
+                                    .length
+                                    .toString(),
                                 'Aktif',
                                 AppColors.success),
                             _statItem(
-                                complaints.where((c) => !c.isActive).length.toString(),
+                                complaints
+                                    .where((c) => !c.isActive)
+                                    .length
+                                    .toString(),
                                 'NonAktif',
                                 AppColors.error),
                           ],

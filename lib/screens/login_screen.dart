@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../constants/colors.dart';
 import '../providers/app_provider.dart';
+import 'admin_main_screen.dart';
 import 'main_screen.dart';
 import 'register_screen.dart';
 
@@ -77,7 +78,10 @@ class _LoginScreenState extends State<LoginScreen>
       if (mounted) {
         Navigator.pushAndRemoveUntil(
           context,
-          MaterialPageRoute(builder: (_) => const MainScreen()),
+          MaterialPageRoute(
+            builder: (_) =>
+                provider.isAdmin ? const AdminMainScreen() : const MainScreen(),
+          ),
           (route) => false,
         );
       }
@@ -231,7 +235,8 @@ class _LoginScreenState extends State<LoginScreen>
                                       label: 'Customer',
                                       icon: Icons.person,
                                       selected: !isAdmin,
-                                      onTap: () => setState(() => isAdmin = false),
+                                      onTap: () =>
+                                          setState(() => isAdmin = false),
                                     ),
                                   ),
                                   const SizedBox(width: 12),
@@ -240,7 +245,8 @@ class _LoginScreenState extends State<LoginScreen>
                                       label: 'Admin',
                                       icon: Icons.admin_panel_settings,
                                       selected: isAdmin,
-                                      onTap: () => setState(() => isAdmin = true),
+                                      onTap: () =>
+                                          setState(() => isAdmin = true),
                                     ),
                                   ),
                                 ],
@@ -254,8 +260,9 @@ class _LoginScreenState extends State<LoginScreen>
                                   icon: Icons.person_outline,
                                   isError: _hasError,
                                 ),
-                                validator: (v) =>
-                                    v == null || v.trim().isEmpty ? 'Wajib diisi' : null,
+                                validator: (v) => v == null || v.trim().isEmpty
+                                    ? 'Wajib diisi'
+                                    : null,
                               ),
                               const SizedBox(height: 14),
                               TextFormField(
@@ -274,12 +281,13 @@ class _LoginScreenState extends State<LoginScreen>
                                       color: AppColors.grey400,
                                       size: 20,
                                     ),
-                                    onPressed: () => setState(
-                                        () => obscurePassword = !obscurePassword),
+                                    onPressed: () => setState(() =>
+                                        obscurePassword = !obscurePassword),
                                   ),
                                 ),
-                                validator: (v) =>
-                                    v == null || v.isEmpty ? 'Wajib diisi' : null,
+                                validator: (v) => v == null || v.isEmpty
+                                    ? 'Wajib diisi'
+                                    : null,
                                 onFieldSubmitted: (_) => _login(),
                               ),
                               const SizedBox(height: 8),
@@ -290,7 +298,8 @@ class _LoginScreenState extends State<LoginScreen>
                                   style: TextButton.styleFrom(
                                     padding: EdgeInsets.zero,
                                     minimumSize: Size.zero,
-                                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                                    tapTargetSize:
+                                        MaterialTapTargetSize.shrinkWrap,
                                   ),
                                   child: const Text(
                                     'Lupa Password?',
@@ -314,7 +323,8 @@ class _LoginScreenState extends State<LoginScreen>
                                     elevation: 2,
                                     shadowColor: const Color(0x4D3377FF),
                                     shape: const RoundedRectangleBorder(
-                                      borderRadius: BorderRadius.all(Radius.circular(14)),
+                                      borderRadius:
+                                          BorderRadius.all(Radius.circular(14)),
                                     ),
                                     textStyle: const TextStyle(
                                       fontSize: 16,
@@ -331,7 +341,8 @@ class _LoginScreenState extends State<LoginScreen>
                                     Navigator.push(
                                       context,
                                       MaterialPageRoute(
-                                        builder: (_) => RegisterScreen(isAdmin: isAdmin),
+                                        builder: (_) =>
+                                            RegisterScreen(isAdmin: isAdmin),
                                       ),
                                     );
                                   },

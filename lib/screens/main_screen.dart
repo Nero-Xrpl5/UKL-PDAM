@@ -23,18 +23,18 @@ class _MainScreenState extends State<MainScreen> {
   Widget build(BuildContext context) {
     final isAdmin = context.watch<AppProvider>().isAdmin;
 
-    final adminScreens = const [
-      AdminDashboardScreen(),
-      BillListScreen(),
-      ServiceListScreen(),
-      ProfileScreen(),
+    final adminScreens = [
+      const AdminDashboardScreen(),
+      const BillListScreen(showBottomNav: false),
+      const ServiceListScreen(),
+      const ProfileScreen(),
     ];
 
-    final customerScreens = const [
-      CustomerHomeScreen(),
-      BillListScreen(),
-      ComplaintScreen(),
-      ProfileScreen(),
+    final customerScreens = [
+      const CustomerHomeScreen(),
+      const BillListScreen(showBottomNav: false),
+      const ComplaintScreen(),
+      const ProfileScreen(),
     ];
 
     final screens = isAdmin ? adminScreens : customerScreens;

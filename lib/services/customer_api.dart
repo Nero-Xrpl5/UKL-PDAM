@@ -1,34 +1,26 @@
-import '../services/api_service.dart';
+import '../models/customer.dart';
+import 'api_service.dart';
 
 class CustomerApi {
-  final ApiService _api = ApiService();
+  static final ApiService _api = ApiService();
 
-  Future<List<dynamic>> getCustomers({int page = 1, int quantity = 100, String search = ''}) async {
-    final response = await _api.get('/customers?page=$page&quantity=$quantity&search=$search');
-    return response?['data'] ?? [];
+  static Future<List<Customer>> getCustomers() async {
+    final response = await _api.get('/customers?page=1&quantity=100');
+    final List<dynamic> data = response?['data'] ?? [];
+    return data.map((e) => Customer.fromJson(e as Map<String, dynamic>)).toList();
   }
 
-  Future<dynamic> createCustomer(Map<String, dynamic> data) async {
-    return await _api.post('/customers', body: data);
+  static Future<void> deleteCustomer(int id) async {
+    await _api.delete('/customers/$id');
   }
 
-  Future<dynamic> updateCustomer(int id, Map<String, dynamic> data) async {
-    return await _api.patch('/customers/$id', body: data);
+  static Future<void> updateCustomer(int id, Map<String, dynamic> payload) async {
+    await _api.patch('/customers/$id', body: payload);
   }
 
-  Future<dynamic> deleteCustomer(int id) async {
-    return await _api.delete('/customers/$id');
+  static Future<void> createCustomer(Map<String, dynamic> payload) async {
+    await _api.post('/customers', body: payload);
   }
 
-  Future<dynamic> getCustomerById(int id) async {
-    return await _api.get('/customers/$id');
-  }
-
-  Future<dynamic> getMe() async {
-    return await _api.get('/customers/me');
-  }
-
-  Future<dynamic> getMeDirect(String endpoint) async {
-    return await _api.get(endpoint);
-  }
+  Future getMeDirect(String endpoint) async {}
 }

@@ -9,7 +9,7 @@ import '../services/api_service.dart';
 import '../widgets/shimmer_card.dart';
 import 'bill_list_screen.dart';
 import 'payment_screen.dart';
-
+import 'customer_bill_detail_screen.dart';
 class CustomerHomeScreen extends StatefulWidget {
   const CustomerHomeScreen({super.key});
 
@@ -153,6 +153,8 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen>
     }
     return data;
   }
+  
+  get b => null;
 
   String _monthShort(int m) {
     const names = [
@@ -337,29 +339,30 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen>
                             ),
                           ),
                           GestureDetector(
-                            onTap: () => Navigator.push(
-                              context,
-                              MaterialPageRoute(
-                                builder: (_) => const BillListScreen(),
+                            onTap: () {
+                              Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (_) =>
+                                      CustomerBillDetailScreen(bill: b),
+                                ),
+                              ).then((_) => _loadData());
+                            },
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 16, vertical: 8),
+                              decoration: BoxDecoration(
+                                color: AppColors.mainColor,
+                                borderRadius: BorderRadius.circular(12),
                               ),
-                            ),
-                            child: Row(
-                              children: [
-                                Text(
-                                  'Detail',
-                                  style: TextStyle(
-                                    fontSize: 14,
-                                    color: AppColors.mainColor,
-                                    fontWeight: FontWeight.w600,
-                                  ),
+                              child: const Text(
+                                'Detail',
+                                style: TextStyle(
+                                  color: AppColors.white,
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w600,
                                 ),
-                                const SizedBox(width: 4),
-                                const Icon(
-                                  Icons.arrow_forward_ios,
-                                  size: 14,
-                                  color: AppColors.mainColor,
-                                ),
-                              ],
+                              ),
                             ),
                           ),
                         ],

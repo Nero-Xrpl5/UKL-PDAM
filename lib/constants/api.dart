@@ -12,4 +12,6 @@ class ApiConfig {
   static const String bills = '/bills';
   static const String payments = '/payments';
   static const String paymentProof = '/payment-proof';
+
+  static customerById(int id) {}
 }

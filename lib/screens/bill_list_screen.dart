@@ -8,10 +8,10 @@ import '../services/bill_api.dart';
 import '../widgets/bottom_nav.dart';
 import '../widgets/shimmer_card.dart';
 import 'main_screen.dart';
-import '';
 
 class BillListScreen extends StatefulWidget {
-  const BillListScreen({super.key});
+  final bool showBottomNav;
+  const BillListScreen({super.key, this.showBottomNav = true});
 
   @override
   State<BillListScreen> createState() => _BillListScreenState();
@@ -77,7 +77,9 @@ class _BillListScreenState extends State<BillListScreen> {
         final cNum =
             (b['customer']?['customer_number'] ?? '').toString().toLowerCase();
         final bNum = (b['measurement_number'] ?? '').toString().toLowerCase();
-        return cName.contains(query) || cNum.contains(query) || bNum.contains(query);
+        return cName.contains(query) ||
+            cNum.contains(query) ||
+            bNum.contains(query);
       }).toList();
     }
     setState(() => filteredBills = result);
@@ -165,17 +167,20 @@ class _BillListScreenState extends State<BillListScreen> {
 
     return Scaffold(
       backgroundColor: AppColors.bgLight,
-      bottomNavigationBar: BottomNav(
-        currentIndex: 2,
-        onTap: (index) {
-          if (index == 2) return;
-          Navigator.pushAndRemoveUntil(
-            context,
-            MaterialPageRoute(builder: (_) => const MainScreen()),
-            (route) => false,
-          );
-        }, isAdmin: Provider.of<AppProvider>(context).isAdmin,
-      ),
+      bottomNavigationBar: widget.showBottomNav
+          ? BottomNav(
+              currentIndex: 2,
+              onTap: (index) {
+                if (index == 2) return;
+                Navigator.pushAndRemoveUntil(
+                  context,
+                  MaterialPageRoute(builder: (_) => const MainScreen()),
+                  (route) => false,
+                );
+              },
+              isAdmin: Provider.of<AppProvider>(context).isAdmin,
+            )
+          : null,
       body: RefreshIndicator(
         onRefresh: _loadBills,
         child: CustomScrollView(
@@ -259,8 +264,7 @@ class _BillListScreenState extends State<BillListScreen> {
                           ),
                           child: Row(
                             children: [
-                              const Icon(Icons.search,
-                                  color: AppColors.dark3),
+                              const Icon(Icons.search, color: AppColors.dark3),
                               const SizedBox(width: 12),
                               Expanded(
                                 child: TextField(
@@ -321,8 +325,7 @@ class _BillListScreenState extends State<BillListScreen> {
                             const Icon(Icons.error_outline,
                                 color: AppColors.error, size: 48),
                             const SizedBox(height: 8),
-                            Text(errorMessage!,
-                                textAlign: TextAlign.center),
+                            Text(errorMessage!, textAlign: TextAlign.center),
                             TextButton(
                               onPressed: _loadBills,
                               child: const Text('Coba Lagi'),
@@ -418,9 +421,8 @@ class _BillListScreenState extends State<BillListScreen> {
     final int id = (bill['id'] as num).toInt();
 
     final payments = bill['payments'];
-    final bool pending = payments != null &&
-        payments is Map &&
-        payments['verified'] == false;
+    final bool pending =
+        payments != null && payments is Map && payments['verified'] == false;
 
     return Padding(
       padding: const EdgeInsets.fromLTRB(20, 6, 20, 6),
@@ -430,8 +432,7 @@ class _BillListScreenState extends State<BillListScreen> {
                 Navigator.push(
                   context,
                   MaterialPageRoute(
-                    builder: (_) =>
-                        PaymentVerificationScreen(bill: bill),
+                    builder: (_) => PaymentVerificationScreen(bill: bill),
                   ),
                 ).then((_) => _loadBills());
               }
@@ -523,8 +524,8 @@ class _BillListScreenState extends State<BillListScreen> {
                 crossAxisAlignment: CrossAxisAlignment.end,
                 children: [
                   Container(
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 10, vertical: 4),
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                     decoration: BoxDecoration(
                       color: stBg,
                       borderRadius: BorderRadius.circular(20),
@@ -544,8 +545,7 @@ class _BillListScreenState extends State<BillListScreen> {
                       GestureDetector(
                         onTap: () {
                           ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(
-                                content: Text('Edit tagihan')),
+                            const SnackBar(content: Text('Edit tagihan')),
                           );
                         },
                         child: Container(

@@ -1,11 +1,16 @@
 import 'package:flutter/material.dart';
+import 'package:intl/date_symbol_data_local.dart';
 import 'package:provider/provider.dart';
 import 'constants/colors.dart';
 import 'providers/app_provider.dart';
 import 'screens/welcome_screen.dart';
 
-void main() {
+void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  
+  // ⬇️ INISIALISASI LOCALE INDONESIA (WAJIB)
+  await initializeDateFormatting('id_ID', null);
+  
   runApp(
     ChangeNotifierProvider(
       create: (_) => AppProvider(),
@@ -105,7 +110,7 @@ class _SplashScreenState extends State<SplashScreen>
                       errorBuilder: (c, e, s) => const Icon(
                         Icons.water_drop,
                         size: 100,
-                        color: AppColors.white,
+                        color: Colors.white,
                       ),
                     ),
                     const SizedBox(height: 24),
@@ -114,7 +119,7 @@ class _SplashScreenState extends State<SplashScreen>
                       style: TextStyle(
                         fontSize: 32,
                         fontWeight: FontWeight.bold,
-                        color: AppColors.white,
+                        color: Colors.white,
                       ),
                     ),
                     const SizedBox(height: 8),
@@ -122,7 +127,7 @@ class _SplashScreenState extends State<SplashScreen>
                       'PDAM Digital',
                       style: TextStyle(
                         fontSize: 16,
-                        color: AppColors.white30,
+                        color: Colors.white70,
                         letterSpacing: 2,
                       ),
                     ),
@@ -131,7 +136,7 @@ class _SplashScreenState extends State<SplashScreen>
                       width: 40,
                       height: 40,
                       child: CircularProgressIndicator(
-                        color: AppColors.white,
+                        color: Colors.white,
                         strokeWidth: 3,
                       ),
                     ),
